@@ -181,6 +181,43 @@ function greeting() {
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
 }
 
+const COMP_LABEL = { exercise: 'Exercise', protein: 'Protein', sleep: 'Sleep', water: 'Water', deepwork: 'Deep work', reading: 'Reading', skills: 'Skills practice', moodEnergy: 'Mood and energy', meditation: 'Meditation', sunlight: 'Sunlight', social: 'Time with people', screen: 'Screen limit' };
+const GAUGE_HINT = { body: 'Exercise, protein, sleep and water', brain: 'Deep work, reading and skills', mind: 'Mood, meditation, sunlight and screens' };
+let firstPaint = true;
+function verdict(n, count) {
+  if (!count && !n) return 'Nothing logged yet';
+  if (n >= 85) return 'Excellent day';
+  if (n >= 70) return 'Strong day';
+  if (n >= 55) return 'Solid day';
+  if (n >= 40) return 'Getting there';
+  return 'Light day so far';
+}
+function ribbon(day, key) {
+  const H = 1440, pct = m => `${(Math.max(0, Math.min(H, m)) / H * 100).toFixed(2)}%`;
+  const start = new Date(key + 'T00:00:00').getTime();
+  const parts = [];
+  if (day.quick.sleep) {
+    const [h, m] = (S.morningTime || '07:30').split(':').map(Number);
+    const wake = h * 60 + m, from = wake - day.quick.sleep * 60;
+    parts.push(`<div class="blk sleep" style="left:${pct(from)};width:${pct(wake - Math.max(0, from))}" title="Sleep ${day.quick.sleep} h"></div>`);
+  }
+  for (const e of day.entries) {
+    let cursor = (e.ts - start) / 60000;
+    for (const a of [...(e.acts || [])].reverse()) {
+      if (a.type === 'food') { parts.push(`<div class="meal" style="left:${pct(cursor)}" title="${esc(a.label)} · ${a.protein || 0} g protein"></div>`); continue; }
+      const mins = Number(a.minutes) || 0; if (!mins || a.type === 'screen') continue;
+      const p = TYPE_PILLAR[a.type] || 'mind';
+      parts.push(`<div class="blk" style="--c:var(--${p === 'neutral' ? 'faint' : p});left:${pct(cursor - mins)};width:${pct(mins)}" title="${esc(a.label)}"></div>`);
+      cursor -= mins;
+    }
+  }
+  const nowM = key === today() ? (Date.now() - start) / 60000 : null;
+  const hours = [0, 6, 12, 18, 24];
+  return `<div class="ribbon-h"><b>Your day</b><span class="ribbon-legend"><span style="--c:var(--sleep)">Sleep</span><span style="--c:var(--body)">Body</span><span style="--c:var(--brain)">Brain</span><span style="--c:var(--mind)">Mind</span></span></div>
+    <div class="ribbon">${hours.slice(1, -1).map(h => `<span class="hr" style="left:${pct(h * 60)}"></span>`).join('')}${parts.join('')}${nowM != null ? `<span class="now" style="left:${pct(nowM)}" title="Now"></span>` : ''}</div>
+    <div class="ribbon-axis">${hours.map(h => `<span style="left:${pct(h * 60)};${h === 0 ? 'transform:none' : h === 24 ? 'transform:translateX(-100%)' : ''}">${h === 0 || h === 24 ? '12 am' : h === 12 ? '12 pm' : h < 12 ? h + ' am' : (h - 12) + ' pm'}</span>`).join('')}</div>`;
+}
+
 function viewToday(v) {
   const key = ui.date, day = getDay(key), sc = scoreOf(key), t = sc.totals;
   const prevKey = shiftKey(key, -1); hasLogPrev = hasLog(prevKey);
@@ -201,38 +238,34 @@ function viewToday(v) {
   ];
 
   v.innerHTML = `
-  <div class="hero">
-    <section class="card overall">
-      <div class="stack" style="gap:4px">
-        <span class="eyebrow">${isToday ? `${greeting()}, ${esc(S.name)}` : fmtDay(key)}</span>
-        <div class="row" style="gap:14px;align-items:flex-end">
-          <span class="big">${sc.overall}<small>/100</small></span>
-          <span class="grade" title="Overall grade">${grade(sc.overall)}</span>
-        </div>
-        <span class="sub">${t.count ? `${t.count} activit${t.count === 1 ? 'y' : 'ies'} logged${prev ? ` · ${deltaHTML(sc.overall, prev.overall)} vs yesterday` : ''}` : 'Nothing logged yet. Start with what you did this morning.'}</span>
-      </div>
+  <section class="day ${firstPaint ? 'intro' : ''}">
+    <div class="day-score">
+      <span class="day-label">${isToday ? `${greeting()}, ${esc(S.name)}` : fmtDay(key)}</span>
+      <div class="score-line"><span class="score-big">${sc.overall}</span><span class="score-of">/100</span></div>
+      <p class="verdict">${verdict(sc.overall, t.count)} ${prev ? deltaHTML(sc.overall, prev.overall) : ''}</p>
       <div class="row">
-        <span class="chip">🔥 <b class="num">${logStreak}</b>&nbsp;day streak</span>
-        <span class="spacer"></span>
+        <span class="chip">🔥 ${logStreak} day streak</span>
         <button class="btn sm primary" id="openReport">${I.report} Report card</button>
       </div>
-    </section>
-    <section class="card">
-      <div class="card-h"><h2>Body · Brain · Mind</h2><span class="sub">last 7 days</span></div>
-      <div class="pillars">
-        ${PILLARS.map(([p, name]) => `
-          <div class="pillar">
-            <div class="ring-wrap">${ring(sc[p], `var(--${p})`, 112, 10, name)}<span class="val">${sc[p]}</span></div>
-            <div class="pillar-name"><span class="legend-dot" style="background:var(--${p})"></span>${name} ${prev ? deltaHTML(sc[p], prev[p]) : ''}</div>
-            ${spark(week.map(k => hasLog(k) ? scoreOf(k)[p] : null), color(p))}
-          </div>`).join('')}
-      </div>
-    </section>
-  </div>
+    </div>
+    <div class="gauges">
+      ${PILLARS.map(([p, name]) => {
+        const comps = Object.entries(sc.parts[p]).filter(([k]) => !(p === 'brain' && k === 'sleep'));
+        const low = comps.sort((a, b) => a[1] - b[1])[0];
+        return `<div class="gauge" style="--c:var(--${p})">
+          <span class="g-name">${name}</span>
+          <div class="g-track" role="img" aria-label="${name} ${sc[p]} out of 100"><i style="width:${sc[p]}%"></i></div>
+          <span class="g-val">${prev ? deltaHTML(sc[p], prev[p]) : ''}${sc[p]}</span>
+          <span class="g-sub">${t.count || hasLog(key) ? `Holding it back: ${COMP_LABEL[low[0]].toLowerCase()} (${Math.round(low[1] * 100)}%)` : GAUGE_HINT[p]}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="ribbon-wrap">${ribbon(day, key)}</div>
+  </section>
 
   <div class="grid">
     <section class="card composer c-7">
-      <div class="card-h"><h2>Log activity</h2><span class="sub">${G.provider(S) ? `${G.providerName(S)} reads your words` : 'Type or speak naturally'}</span></div>
+      <div class="card-h"><h2>What did you do?</h2><span class="sub">${G.provider(S) ? `${G.providerName(S)} reads your words` : 'Write it the way you’d say it'}</span></div>
       <textarea class="input" id="logText" placeholder="10 min sun walk, 2 eggs + dal, read 20 pages, 90 min deep work on lab report"></textarea>
       <div class="bar">
         <button class="btn mic" id="micBtn" aria-label="Speak your log">${I.mic}<span>Speak</span></button>
@@ -257,7 +290,7 @@ function viewToday(v) {
     </section>
 
     <section class="card c-12">
-      <div class="card-h"><h2>Quick check-in</h2><span class="sub">Tap to adjust</span></div>
+      <div class="card-h"><h2>Check-in</h2><span class="sub">How you slept and how you feel</span></div>
       <div class="quick">
         ${stepper('sleep', 'Sleep', day.quick.sleep, 'h', 0.5)}
         ${stepper('water', 'Water', t.water, 'L', 0.25)}
@@ -273,14 +306,14 @@ function viewToday(v) {
         ${day.entries.length ? [...day.entries].reverse().map(e => `
           <div class="entry">
             <time>${timeOf(e.ts)}</time>
-            <div><div class="raw">${esc(e.text)}</div><div class="acts">${(e.acts || []).map(actChip).join('')}</div></div>
+            <div><div class="raw">${esc(e.text)}</div><div class="acts">${(e.acts || []).map((a, i) => actChip(a, e.id, i)).join('')}</div>${(e.acts || []).map((a, i) => foodBreakdown(a, e.id, i)).join('')}</div>
             <button class="icon-btn del" data-id="${e.id}" aria-label="Delete entry">${I.x}</button>
           </div>`).join('') : `<div class="empty">${I.log}<b>No entries yet</b><span>Write one line about anything you did. Jarvis turns it into numbers.</span></div>`}
       </div>
     </section>
 
     <section class="card c-5">
-      <div class="card-h"><h2>Skills & habits</h2><span class="sub">Tap when done (15 min)</span></div>
+      <div class="card-h"><h2>Skills & habits</h2><span class="sub">Tap one when you’ve done 15 minutes</span></div>
       <div class="stack">
         ${S.skills.map(k => {
           const done = t.skills[k] > 0;
@@ -297,6 +330,7 @@ function viewToday(v) {
   $('#logBtn').onclick = () => submitLog();
   $('#logText').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitLog(); });
   $$('.ex').forEach(b => b.onclick = () => { const ta = $('#logText'); ta.value = (ta.value ? ta.value.replace(/[,\s]*$/, ', ') : '') + b.textContent; ta.focus(); });
+  $$('.editfood').forEach(b => b.onclick = () => editFood(key, b.dataset.e, +b.dataset.i));
   $$('.del').forEach(b => b.onclick = () => {
     const d = getDay(key); d.entries = d.entries.filter(e => e.id !== b.dataset.id); persist(key); render(); toast('Entry deleted');
   });
@@ -320,6 +354,7 @@ function viewToday(v) {
     q[f] = q[f] === +n ? null : +n; persist(key); render();
   });
   setupMic();
+  firstPaint = false;
 }
 
 const fmtN = n => (n == null ? '—' : Number.isInteger(n) ? n : (+n).toFixed(1));
@@ -334,11 +369,37 @@ function scale(f, label, val) {
 }
 const TYPE_PILLAR = { walk: 'body', sunwalk: 'mind', run: 'body', gym: 'body', yoga: 'body', cycle: 'body', swim: 'body', sport: 'body', exercise: 'body', food: 'body', water: 'body', sleep: 'body', reading: 'brain', study: 'brain', deepwork: 'brain', english: 'brain', chess: 'brain', upsc: 'brain', meditation: 'mind', movie: 'mind', social: 'mind', screen: 'mind', other: 'neutral' };
 const TYPE_NAME = { sunwalk: 'Sun walk', deepwork: 'Deep work', english: 'English', upsc: 'UPSC', food: 'Food' };
-function actChip(a) {
+function actChip(a, entryId, idx) {
   const p = TYPE_PILLAR[a.type] || 'neutral';
   const name = TYPE_NAME[a.type] || (a.type[0].toUpperCase() + a.type.slice(1));
-  const bits = [a.minutes ? `${a.minutes} min` : '', a.protein ? `${a.protein} g protein` : '', a.pages ? `${a.pages} pages` : '', a.litres ? `${a.litres} L` : '', a.hours ? `${a.hours} h` : ''].filter(Boolean).join(' · ');
-  return `<span class="pill ${p}">${name}${bits ? ` · ${bits}` : ''}</span>`;
+  const bits = [a.minutes ? `${a.minutes} min` : '', a.type === 'food' ? `${a.protein || 0} g protein` : '', a.pages ? `${a.pages} pages` : '', a.litres ? `${a.litres} L` : '', a.hours ? `${a.hours} h` : ''].filter(Boolean).join(', ');
+  if (a.type === 'food' && entryId) return `<button class="pill ${p} editfood" data-e="${entryId}" data-i="${idx}" title="Tap to check or correct">${name} <span style="font-weight:500">${bits}${a.edited ? ', edited' : ''}</span> ✎</button>`;
+  return `<span class="pill ${p}">${name}${bits ? ` <span style="font-weight:500">${bits}</span>` : ''}</span>`;
+}
+function foodBreakdown(a, entryId, idx) {
+  if (a.type !== 'food' || !a.items?.length) return '';
+  return `<div class="breakdown">${a.items.map(it => it.known === false
+    ? `<button class="bd warn editfood" data-e="${entryId}" data-i="${idx}">⚠ ${esc(it.name)} · not counted, tap to add</button>`
+    : `<span class="bd">${esc(it.name)} <span class="sub">${esc(it.desc || '')}</span> <b class="num">${fmtN(it.protein)} g</b></span>`).join('')}</div>`;
+}
+function editFood(key, entryId, idx) {
+  const entry = getDay(key).entries.find(e => e.id === entryId); if (!entry) return;
+  const a = entry.acts[idx];
+  const items = a.items?.length ? a.items : [{ name: a.label, desc: '', protein: a.protein || 0, known: true }];
+  sheet(`<h3>Check protein</h3><p class="sub" style="margin:0 0 14px">“${esc(entry.text)}”. Change any number that looks wrong; packaged food labels give the exact value.</p>
+    <div class="stack" id="fiList">${items.map((it, j) => `
+      <div class="row" style="gap:10px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b>${esc(it.name)}</b><br><span class="sub">${esc(it.known === false ? 'not in food table, enter grams of protein' : it.desc || '')}</span></span>
+      <input class="input mono" style="width:90px" type="number" min="0" step="0.5" id="fi-${j}" value="${it.known === false ? '' : fmtN(it.protein)}" placeholder="g"><span class="sub">g</span></div>`).join('')}</div>
+    <div class="row" style="margin-top:16px"><span class="sub" id="fiTotal"></span><span class="spacer"></span><button class="btn ghost" id="fiCancel">Cancel</button><button class="btn primary" id="fiSave">Save</button></div>`);
+  const total = () => items.reduce((s, _, j) => s + (parseFloat($('#fi-' + j).value) || 0), 0);
+  const upd = () => { $('#fiTotal').textContent = `Total ${Math.round(total() * 10) / 10} g`; };
+  items.forEach((_, j) => $('#fi-' + j).addEventListener('input', upd)); upd();
+  $('#fiCancel').onclick = closeSheet;
+  $('#fiSave').onclick = () => {
+    a.items = items.map((it, j) => { const v = $('#fi-' + j).value; return v === '' ? it : { ...it, protein: parseFloat(v) || 0, known: true }; });
+    a.protein = Math.round(a.items.reduce((s, it) => s + (it.protein || 0), 0));
+    a.edited = true; persist(key); closeSheet(); render(); toast(`Saved: ${a.protein} g protein`);
+  };
 }
 
 async function submitLog() {
@@ -456,7 +517,7 @@ function viewReport(v) {
     <div class="report-head">
       <div class="report-grade">${grade(sc.overall)}</div>
       <div class="stack" style="gap:6px">
-        <span class="eyebrow">Report card · ${fmtDay(key)} · ${sc.overall}/100</span>
+        <span class="eyebrow">${fmtDay(key)}, ${sc.overall} out of 100</span>
         <h2>${esc(rep.headline)}</h2>
         <p class="coach">${ui.busy.report && !rep.coach_note ? '<span class="skeleton" style="display:block;width:80%"></span>' : esc(rep.coach_note)}</p>
         <div class="row" style="margin-top:6px">
@@ -503,7 +564,7 @@ function viewReport(v) {
       <div class="sugs">
         ${(rep.suggestions || []).map((s, i) => `
           <div class="sug">
-            <span class="n">0${i + 1}</span>
+            
             <b>${esc(s.title)}</b>
             <p>${esc(s.why)}</p>
             ${s.when ? `<span class="when">${I.cal.replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px;fill:none;stroke:currentColor;stroke-width:2"')} ${esc(s.when)}</span>` : ''}
@@ -689,7 +750,7 @@ function viewPlan(v) {
     <section class="card c-5">
       <div class="card-h"><h2>Focus for ${ui.planDay}</h2><span class="sub">From ${fmtDay(shiftKey(dayKey, -1)).toLowerCase()}’s report</span></div>
       <div class="stack">
-        ${planned.map((s, i) => `<div class="sug"><span class="n">0${i + 1}</span><b>${esc(s.title)}</b><p>${esc(s.why)}</p></div>`).join('')}
+        ${planned.map((s, i) => `<div class="sug"><b>${esc(s.title)}</b><p>${esc(s.why)}</p></div>`).join('')}
       </div>
     </section>
     <section class="card c-7">
@@ -1078,6 +1139,16 @@ const addMin = (t, m) => { const [h, mm] = t.split(':').map(Number); const x = M
 // ============================================================
 // Boot
 // ============================================================
+// One-time fix: re-count food logged before the item-level food table existed.
+(() => {
+  let changed = false;
+  for (const d of Object.values(state.days)) for (const e of d.entries || []) {
+    if (e.via === 'gemini' || e.via === 'claude' || e.quick) continue;
+    if (!(e.acts || []).some(a => a.type === 'food' && !a.items && !a.edited)) continue;
+    e.acts = parseLocal(e.text); d.updatedAt = Date.now(); changed = true;
+  }
+  if (changed) save();
+})();
 applyTheme();
 const initial = location.hash.slice(1) === 'prefs' ? 'settings' : location.hash.slice(1);
 if (NAV.some(n => n[0] === initial)) ui.view = initial;

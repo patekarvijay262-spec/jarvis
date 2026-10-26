@@ -1,5 +1,5 @@
 // Local free-text parser. Works offline; Gemini replaces it when a key is set.
-import { PROTEIN } from './knowledge.js';
+import { parseFood } from './foods.js';
 
 const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, half: 0.5 };
 
@@ -45,22 +45,6 @@ const RULES = [
   { type: 'water',      re: /water|glasses?\b|litre|liter|\bl\b|bottle/ }
 ].map(r => ({ ...r, re: r.re instanceof RegExp ? r.re : new RegExp(r.re) }));
 
-function foodProtein(chunk) {
-  const t = chunk.toLowerCase();
-  let total = 0; const hits = [];
-  for (const p of PROTEIN) {
-    const m = t.match(new RegExp('(\\d+(?:\\.\\d+)?|a|an|one|two|three|four|five|six|half)?\\s*(?:g\\s+|gm\\s+|grams?\\s+|bowls?\\s+(?:of\\s+)?|cups?\\s+(?:of\\s+)?|glass(?:es)?\\s+(?:of\\s+)?|plates?\\s+(?:of\\s+)?|scoops?\\s+(?:of\\s+)?)?(?:' + p.k.source + ')'));
-    if (!m) continue;
-    let qty = num(m[1]) ?? 1;
-    // grams given for 100 g / 50 g foods
-    const gramMatch = m[0].match(/(\d+)\s*(g|gm|grams?)\b/);
-    if (gramMatch && /\d+ g/.test(p.unit)) qty = parseFloat(gramMatch[1]) / parseFloat(p.unit);
-    total += qty * p.per;
-    hits.push(m[0].trim());
-  }
-  return hits.length ? { protein: Math.round(total), hits } : null;
-}
-
 export function splitChunks(text) {
   return text
     .split(/\n|,|;|\.(?!\d)|\bthen\b|\balso\b/i)
@@ -74,16 +58,16 @@ export function parseLocal(text) {
   const chunks = splitChunks(text);
   for (const chunk of chunks) {
     const lc = chunk.toLowerCase();
-    const food = foodProtein(chunk);
+    const food = parseFood(chunk);
     // Food chunks often contain "+": "2 eggs + dal"
-    if (food && !/walk|run|gym|read|study/.test(lc)) {
-      out.push({ type: 'food', label: chunk, protein: food.protein });
+    if (food && !/\b(walk|walked|run|ran|gym|read|study|studied|played)\b/.test(lc)) {
+      out.push({ type: 'food', label: chunk, protein: food.protein, items: food.items });
       continue;
     }
     const rule = RULES.find(r => r.re.test(lc));
     const minutes = minutesIn(chunk);
     if (!rule) {
-      if (food) out.push({ type: 'food', label: chunk, protein: food.protein });
+      if (food) out.push({ type: 'food', label: chunk, protein: food.protein, items: food.items });
       else out.push({ type: 'other', label: chunk, minutes });
       continue;
     }
@@ -119,7 +103,6 @@ export function parseLocal(text) {
       if (h) a.minutes = parseFloat(h[1]) * 60;
     }
     if (/outside|outdoor|sun|park|ground|beach/.test(lc) && ['walk', 'run', 'cycle', 'sport'].includes(rule.type)) a.sun = true;
-    if (food) a.protein = food.protein;
     out.push(a);
   }
   return out;
