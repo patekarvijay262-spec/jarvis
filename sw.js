@@ -1,6 +1,6 @@
 // Offline shell cache. Bump VERSION when you change files.
-const VERSION = 'jarvis-v1';
-const SHELL = ['./', 'index.html', 'css/styles.css', 'js/app.js', 'js/store.js', 'js/scoring.js', 'js/parser.js', 'js/knowledge.js', 'js/charts.js', 'js/gemini.js', 'js/cloud.js', 'js/calendar.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'jarvis-v3';
+const SHELL = ['./', 'index.html', 'css/styles.css', 'js/app.js', 'js/store.js', 'js/scoring.js', 'js/parser.js', 'js/knowledge.js', 'js/charts.js', 'js/gemini.js', 'js/cloud.js', 'js/calendar.js', 'js/foods.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
