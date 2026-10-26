@@ -1,0 +1,37 @@
+rules_version = '2';
+// Jarvis security rules. Paste into Firebase → Firestore Database → Rules → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Private: your full logs and settings. Only you.
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+      match /days/{day} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // Public-ish profile: name, photo, friend code, and the list of people YOU share scores with.
+    match /profiles/{uid} {
+      allow read: if signedIn();
+      allow write: if isOwner(uid);
+    }
+
+    // Friend code → user id lookup.
+    match /codes/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Daily scores only (no log text). Readable by you and by people you have added.
+    match /scores/{uid}/days/{day} {
+      allow write: if isOwner(uid);
+      allow read: if isOwner(uid) ||
+        (signedIn() && request.auth.uid in get(/databases/$(database)/documents/profiles/$(uid)).data.friends);
+    }
+  }
+}
