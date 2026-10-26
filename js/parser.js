@@ -1,0 +1,126 @@
+// Local free-text parser. Works offline; Gemini replaces it when a key is set.
+import { PROTEIN } from './knowledge.js';
+
+const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, half: 0.5 };
+
+function num(s) {
+  if (s == null) return null;
+  const t = String(s).toLowerCase();
+  if (NUM_WORDS[t] != null) return NUM_WORDS[t];
+  const n = parseFloat(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+// minutes from "20 min", "1.5 hr", "1h 20m", "45m"
+export function minutesIn(text) {
+  const t = text.toLowerCase();
+  let total = 0, found = false;
+  const h = t.match(/(\d+(?:\.\d+)?|an?|one|two|three|half)\s*(?:h|hr|hrs|hour|hours)\b/);
+  if (h) { total += num(h[1]) * 60; found = true; }
+  const m = t.match(/(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)\b/);
+  if (m) { total += num(m[1]); found = true; }
+  return found ? Math.round(total) : null;
+}
+
+const RULES = [
+  { type: 'sunwalk',    re: /sun\s*walk|walk.*sun|sun.*walk|morning walk outside|sunlight|sunbath/ },
+  { type: 'run',        re: /\brun\b|\bran\b|running|jog/ },
+  { type: 'gym',        re: /\bgym\b|weights|lift|strength|push.?ups|pull.?ups|squats|workout|calisthenics/ },
+  { type: 'yoga',       re: /yoga|stretch|surya namaskar/ },
+  { type: 'cycle',      re: /cycl|bike/ },
+  { type: 'swim',       re: /swim/ },
+  { type: 'sport',      re: /football|cricket|badminton|basketball|volleyball|tennis|table tennis|tt\b|squash|kabaddi|played/ },
+  { type: 'walk',       re: /\bwalk|steps\b/ },
+  { type: 'meditation', re: /meditat|breathwork|pranayam|mindful/ },
+  { type: 'english',    re: /english|speaking practice|spoke|shadowing|toastmaster/ },
+  { type: 'chess',      re: /chess|puzzles?\b|lichess|rapid game|blitz/ },
+  { type: 'upsc',       re: /upsc|the hindu|indian express|laxmikanth|polity|current affairs|gs paper|ncert/ },
+  { type: 'reading',    re: /\bread|pages|book|novel/ },
+  { type: 'deepwork',   re: /deep work|focus(ed)? (work|block)|coding|coded|assignment|project work|lab report/ },
+  { type: 'study',      re: /stud(y|ied)|lecture|revision|revised|class|practice problems|tutorial/ },
+  { type: 'movie',      re: /movie|film|series|netflix|episode|anime|tv\b/ },
+  { type: 'screen',     re: /screen time|instagram|insta\b|reels|youtube|scroll|social media/ },
+  { type: 'social',     re: /friends|family|called|hangout|hung out|dinner with|met \w+/ },
+  { type: 'sleep',      re: /\bslept|sleep|nap/ },
+  { type: 'water',      re: /water|glasses?\b|litre|liter|\bl\b|bottle/ }
+].map(r => ({ ...r, re: r.re instanceof RegExp ? r.re : new RegExp(r.re) }));
+
+function foodProtein(chunk) {
+  const t = chunk.toLowerCase();
+  let total = 0; const hits = [];
+  for (const p of PROTEIN) {
+    const m = t.match(new RegExp('(\\d+(?:\\.\\d+)?|a|an|one|two|three|four|five|six|half)?\\s*(?:g\\s+|gm\\s+|grams?\\s+|bowls?\\s+(?:of\\s+)?|cups?\\s+(?:of\\s+)?|glass(?:es)?\\s+(?:of\\s+)?|plates?\\s+(?:of\\s+)?|scoops?\\s+(?:of\\s+)?)?(?:' + p.k.source + ')'));
+    if (!m) continue;
+    let qty = num(m[1]) ?? 1;
+    // grams given for 100 g / 50 g foods
+    const gramMatch = m[0].match(/(\d+)\s*(g|gm|grams?)\b/);
+    if (gramMatch && /\d+ g/.test(p.unit)) qty = parseFloat(gramMatch[1]) / parseFloat(p.unit);
+    total += qty * p.per;
+    hits.push(m[0].trim());
+  }
+  return hits.length ? { protein: Math.round(total), hits } : null;
+}
+
+export function splitChunks(text) {
+  return text
+    .split(/\n|,|;|\.(?!\d)|\bthen\b|\balso\b/i)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+// Returns an array of activity objects.
+export function parseLocal(text) {
+  const out = [];
+  const chunks = splitChunks(text);
+  for (const chunk of chunks) {
+    const lc = chunk.toLowerCase();
+    const food = foodProtein(chunk);
+    // Food chunks often contain "+": "2 eggs + dal"
+    if (food && !/walk|run|gym|read|study/.test(lc)) {
+      out.push({ type: 'food', label: chunk, protein: food.protein });
+      continue;
+    }
+    const rule = RULES.find(r => r.re.test(lc));
+    const minutes = minutesIn(chunk);
+    if (!rule) {
+      if (food) out.push({ type: 'food', label: chunk, protein: food.protein });
+      else out.push({ type: 'other', label: chunk, minutes });
+      continue;
+    }
+    const a = { type: rule.type, label: chunk };
+    if (minutes != null) a.minutes = minutes;
+    if (rule.type === 'reading' || rule.type === 'upsc') {
+      const p = lc.match(/(\d+)\s*pages?/);
+      if (p) a.pages = parseInt(p[1], 10);
+      if (a.minutes == null && a.pages) a.minutes = Math.round(a.pages * 1.5);
+    }
+    if (rule.type === 'chess') {
+      const g = lc.match(/(\d+)\s*(games?|puzzles?)/);
+      if (g) a.count = parseInt(g[1], 10);
+      if (a.minutes == null && g) a.minutes = /puzzle/.test(g[2]) ? Math.round(a.count * 2) : a.count * 10;
+    }
+    if (rule.type === 'walk' || rule.type === 'sunwalk') {
+      const s = lc.match(/(\d[\d,]*)\s*steps/);
+      if (s) { a.steps = parseInt(s[1].replace(/,/g, ''), 10); if (a.minutes == null) a.minutes = Math.round(a.steps / 100); }
+      if (rule.type === 'sunwalk') a.sun = true;
+    }
+    if (rule.type === 'sleep') {
+      const h = lc.match(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours)/);
+      if (h) a.hours = parseFloat(h[1]);
+    }
+    if (rule.type === 'water') {
+      const l = lc.match(/(\d+(?:\.\d+)?)\s*(l|litre|liter|litres|liters)\b/);
+      const g = lc.match(/(\d+)\s*(glass|glasses)/);
+      const b = lc.match(/(\d+)\s*(bottle|bottles)/);
+      a.litres = l ? parseFloat(l[1]) : g ? parseInt(g[1], 10) * 0.25 : b ? parseInt(b[1], 10) * 1 : 0.25;
+    }
+    if (rule.type === 'screen') {
+      const h = lc.match(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours)/);
+      if (h) a.minutes = parseFloat(h[1]) * 60;
+    }
+    if (/outside|outdoor|sun|park|ground|beach/.test(lc) && ['walk', 'run', 'cycle', 'sport'].includes(rule.type)) a.sun = true;
+    if (food) a.protein = food.protein;
+    out.push(a);
+  }
+  return out;
+}
