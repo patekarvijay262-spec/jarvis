@@ -217,6 +217,10 @@ button.pill:hover { filter: brightness(1.08); box-shadow: 0 0 0 1.5px currentCol
 .bd .sub { font-size: 12px; }
 .bd b { font-family: var(--font-display); }
 .bd.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--surface)); border: 1px dashed color-mix(in srgb, var(--warn) 60%, transparent); cursor: pointer; font: inherit; font-size: 13px; }
+.unk { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.unk-picks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+button.unk-pick { border: 1px dashed var(--line); }
+button.unk-pick:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .empty { text-align: center; padding: 30px 12px; color: var(--muted); display: grid; gap: 6px; justify-items: center; }
 .empty b { color: var(--fg); font-family: var(--font-display); font-size: 17px; }
 .empty svg { width: 34px; height: 34px; stroke: var(--faint); fill: none; stroke-width: 1.6; }
@@ -429,6 +433,7 @@ textarea.mono, input.mono { font-family: ui-monospace, 'SF Mono', Menlo, Consola
 .nut-src-list.empty { font-size: 12px; color: var(--faint); }
 .src-chip { display: inline-flex; align-items: baseline; gap: 4px; font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
 .src-chip b { font-family: var(--font-display); color: var(--fg); font-weight: 700; }
+.src-chip time { color: var(--faint); font-size: 11px; }
 .src-chip.more { color: var(--faint); font-style: italic; }
 
 /* "What to eat" gap suggestions */
