@@ -65,7 +65,7 @@ Each person signs in to their own copy of the site (the same link works for ever
 
 All scores are 0–100 and computed on your device the same way every day, so trends and friend comparisons are fair.
 
-- **Body** = exercise 35% (WHO 150 min/week ≈ 30 min/day; vigorous minutes count double; strength bonus) + protein 30% (body weight × 1.4 g/kg, ISSN range 1.4–2.0) + sleep 25% (7–9 h) + water 10%.
+- **Body** = exercise 30% (WHO 150 min/week ≈ 30 min/day; vigorous minutes count double; strength bonus) + protein 20% (body weight × 1.4 g/kg, ISSN range 1.4–2.0) + diet quality 15% (calories near target, plus fibre, iron, calcium, vitamin C and B12 toward ICMR-NIN 2020 daily needs) + sleep 25% (7–9 h) + water 10%.
 - **Brain** = deep work + study 40% + reading 25% + skills practiced 25% (spoken English, chess, UPSC) + sleep 10%.
 - **Mind** = mood & energy 35% + meditation 25% + sunlight 15% + social time 10% + staying under your screen limit 15%.
 
@@ -78,7 +78,8 @@ index.html            app shell
 css/styles.css        design tokens + layout (light and dark)
 js/app.js             screens and interactions
 js/scoring.js         scores, grades, streaks, rule-based suggestions
-js/parser.js          offline free-text parser (Indian foods included)
+js/parser.js          offline free-text parser
+js/foods.js           Indian food table: calories, protein, carbs, fat, fibre, iron, calcium, vitamin C, B12
 js/knowledge.js       guidelines, activity effects, protein table, defaults
 js/gemini.js          Gemini API: parsing, report card, morning plan
 js/cloud.js           Firebase auth, sync, friends
