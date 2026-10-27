@@ -682,13 +682,32 @@ async function refineLogEntry(key, id, text) {
   persist(key);
   render();
 }
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1] || '');
-    r.onerror = () => reject(new Error('Could not read the file'));
-    r.readAsDataURL(file);
+// SheetJS is only needed for the one-off "upload mess menu" action, so load it on demand.
+let xlsxLoading;
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve();
+  if (xlsxLoading) return xlsxLoading;
+  xlsxLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Could not load the Excel reader. Check your connection.'));
+    document.head.appendChild(s);
   });
+  return xlsxLoading;
+}
+async function readExcelMenu(file) {
+  await loadXLSX();
+  const buf = await file.arrayBuffer();
+  const wb = window.XLSX.read(buf, { type: 'array' });
+  const text = wb.SheetNames
+    .map(name => {
+      const csv = window.XLSX.utils.sheet_to_csv(wb.Sheets[name], { blankrows: false }).trim();
+      return csv && wb.SheetNames.length > 1 ? `${name}\n${csv}` : csv;
+    })
+    .filter(Boolean).join('\n\n');
+  if (!text) throw new Error('No readable rows found in that file.');
+  return text;
 }
 
 function setupMic() {
@@ -1306,10 +1325,10 @@ function viewSettings(v) {
 
     <section class="card c-12" id="sec-mess">
       <div class="card-h"><h2>Mess menu</h2><span class="sub">${S.messMenu ? 'Saved — Jarvis can suggest from it' : 'Not added yet'}</span></div>
-      <p class="sub" style="margin:0 0 12px">Paste your weekly mess menu, or photograph it and Jarvis reads it for you. Used by “What to eat” on the Nutrition card to suggest dishes that are actually on offer.</p>
+      <p class="sub" style="margin:0 0 12px">Paste your weekly mess menu, or upload the Excel file directly. Used by “What to eat” on the Nutrition card to suggest dishes that are actually on offer.</p>
       <label class="field">Weekly menu<textarea class="input mono" id="messMenu" rows="9" placeholder="Monday&#10;Breakfast: poha, boiled egg, tea&#10;Lunch: dal, rice, roti, aloo sabji, salad&#10;…">${esc(S.messMenu)}</textarea></label>
       <div class="row" style="margin-top:10px">
-        <label class="btn sm" for="messPhoto">${I.spark} Read from a photo</label><input type="file" id="messPhoto" accept="image/*" hidden>
+        <label class="btn sm" for="messExcel">${I.spark} Upload Excel file</label><input type="file" id="messExcel" accept=".xlsx,.xls,.csv" hidden>
         <span class="spacer"></span>
         <button class="btn sm primary" id="messSave">Save menu</button>
       </div>
@@ -1382,16 +1401,13 @@ function viewSettings(v) {
 
   // Mess menu
   $('#messSave').onclick = () => { S.messMenu = $('#messMenu').value.trim(); saveSettings(); render(); toast('Mess menu saved'); };
-  $('#messPhoto').onchange = async e => {
+  $('#messExcel').onchange = async e => {
     const file = e.target.files[0]; if (!file) return;
-    if (!G.provider(S)) { toast('Add a Gemini key above first, or paste the menu as text.', 4000); e.target.value = ''; return; }
-    toast('Reading the menu photo…', 6000);
+    toast('Reading the Excel file…', 5000);
     try {
-      const b64 = await fileToBase64(file);
-      const text = await G.readMessMenuImage(S, b64, file.type);
-      $('#messMenu').value = text;
+      $('#messMenu').value = await readExcelMenu(file);
       toast('Menu read — check it looks right, then Save');
-    } catch (err) { toast(`Couldn’t read that photo: ${err.message.slice(0, 80)}`, 4500); }
+    } catch (err) { toast(`Couldn’t read that file: ${err.message.slice(0, 80)}`, 4500); }
     e.target.value = '';
   };
 
