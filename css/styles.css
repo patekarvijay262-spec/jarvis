@@ -398,12 +398,15 @@ textarea.mono, input.mono { font-family: ui-monospace, 'SF Mono', Menlo, Consola
 .donut-l { font-size: 10.5px; fill: var(--muted); font-weight: 600; }
 .macros { display: grid; gap: 10px; min-width: 0; }
 .macro .meter i { background: var(--c); }
-.micros { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin-top: 18px; }
+.nut-pct { display: block; margin-top: 10px; }
+.micros-head { margin-top: 20px; margin-bottom: 10px; }
+.micros { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
 .micros.big { margin-top: 0; }
 .micro .meter i { background: color-mix(in srgb, var(--fg) 55%, var(--surface)); }
 .micro.met .meter i { background: var(--good); }
 .micro .t-top b, .macro .t-top b { font-size: 13.5px; }
-.nut-note { margin: 14px 0 0; font-size: 12px; color: var(--faint); line-height: 1.45; }
+.nut-src { display: inline-flex; align-items: center; gap: 4px; cursor: help; }
+.info-ic { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; vertical-align: -2px; }
 
 /* Food chips are buttons now */
 button.bd { border: 0; cursor: pointer; font: inherit; font-size: 13px; color: inherit; text-align: left; }
