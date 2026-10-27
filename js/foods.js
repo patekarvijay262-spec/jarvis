@@ -154,6 +154,24 @@ function fuzzyWord(word) {
 }
 
 const numOf = s => { if (s == null) return null; const t = s.toLowerCase(); if (NUM_WORDS[t] != null) return NUM_WORDS[t]; const n = parseFloat(t); return Number.isFinite(n) ? n : null; };
+
+// Up to `n` closest known foods for a phrase that didn't match anything — for a "did you mean" prompt
+// when a word is too mangled for the automatic typo-tolerant match (more than ~2 edits away).
+export function suggestFoods(phrase, n = 3) {
+  const words = String(phrase || '').toLowerCase().replace(FILLER, ' ').replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3);
+  if (!words.length) return [];
+  const best = new Map(); // food -> smallest distance seen
+  for (const w of words) for (const { word, food } of FOOD_WORDS) {
+    const d = levenshtein(w, word);
+    if (!best.has(food) || d < best.get(food)) best.set(food, d);
+  }
+  return [...best.entries()].sort((a, b) => a[1] - b[1]).slice(0, n).map(([food]) => food);
+}
+// Best-guess quantity for a phrase like "1 handful boiled channa" (defaults to 1 serving).
+export function guessQty(phrase) {
+  const m = String(phrase || '').match(/\b(\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|half)\b/i);
+  return (m && numOf(m[1])) || 1;
+}
 export const r1 = x => Math.round(x * 10) / 10;
 const r2 = x => Math.round(x * 100) / 100;
 

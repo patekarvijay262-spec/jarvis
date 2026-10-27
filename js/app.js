@@ -1,6 +1,6 @@
 import { state, save, getDay, touch, mergeDays, dateKey, shiftKey, exportJSON, importJSON, uid } from './store.js';
 import { parseLocal } from './parser.js';
-import { NUTRIENTS, NKEYS, FOODS, findFood, makeItem, scaleN, itemNutrients, actNutrients, zeroN, addN, fmtQty, r1 as round1, dailyTargets } from './foods.js';
+import { NUTRIENTS, NKEYS, FOODS, findFood, makeItem, scaleN, itemNutrients, actNutrients, zeroN, addN, fmtQty, r1 as round1, dailyTargets, suggestFoods, guessQty } from './foods.js';
 import { score, grade, achievements, localSuggestions, streak, skillName } from './scoring.js';
 import { GUIDELINES, SKILL_LABELS, DEFAULT_SETTINGS } from './knowledge.js';
 import * as G from './gemini.js';
@@ -345,6 +345,18 @@ function viewToday(v) {
   $('#logText').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitLog(); });
   $$('.ex').forEach(b => b.onclick = () => { const ta = $('#logText'); ta.value = (ta.value ? ta.value.replace(/[,\s]*$/, ', ') : '') + b.textContent; ta.focus(); });
   $$('.editfood').forEach(b => b.onclick = () => editFood(key, b.dataset.e, +b.dataset.i));
+  $$('.unk-pick').forEach(b => b.onclick = () => {
+    const entry = getDay(key).entries.find(e => e.id === b.dataset.e); if (!entry) return;
+    const act = entry.acts[+b.dataset.i], j = +b.dataset.j, food = findFood(b.dataset.food);
+    if (!act?.items?.[j] || !food) return;
+    const qty = guessQty(act.items[j].name);
+    act.items[j] = makeItem(food, qty, `${fmtQty(qty)} × ${food.unit} (confirmed)`);
+    act.n = act.items.reduce((sum, it) => addN(sum, it.n), zeroN());
+    act.protein = round1(act.n.p);
+    act.edited = true;
+    persist(key); render();
+    toast(`Added ${food.name}: ${fmtQty(qty)} × ${food.unit}`);
+  });
   $$('.del').forEach(b => b.onclick = () => {
     const d = getDay(key); d.entries = d.entries.filter(e => e.id !== b.dataset.id); persist(key); render(); toast('Entry deleted');
   });
@@ -551,8 +563,14 @@ function actChip(a, entryId, idx) {
 function actN(a) { return a.items?.length ? a.items.reduce((sum, it) => addN(sum, itemNutrients(it)), zeroN()) : (a.n || { ...zeroN(), p: Number(a.protein) || 0 }); }
 function foodBreakdown(a, entryId, idx) {
   if (a.type !== 'food' || !a.items?.length) return '';
-  return `<div class="breakdown">${a.items.map(it => {
-    if (it.known === false) return `<button class="bd warn editfood" data-e="${entryId}" data-i="${idx}">⚠ ${esc(it.name)}: not counted, tap to add</button>`;
+  return `<div class="breakdown">${a.items.map((it, j) => {
+    if (it.known === false) {
+      const picks = suggestFoods(it.name, 3);
+      return `<div class="unk">
+        <button class="bd warn editfood" data-e="${entryId}" data-i="${idx}">⚠ ${esc(it.name)}: not counted, tap to add</button>
+        ${picks.length ? `<div class="unk-picks"><span class="sub">Did you mean:</span>${picks.map(f => `<button class="chip unk-pick" data-e="${entryId}" data-i="${idx}" data-j="${j}" data-food="${esc(f.name)}">${esc(f.name)}</button>`).join('')}</div>` : ''}
+      </div>`;
+    }
     const n = itemNutrients(it);
     return `<button class="bd editfood" data-e="${entryId}" data-i="${idx}" title="Tap to adjust">${esc(it.name)} <span class="sub">${esc(it.desc || '')}</span> <span class="bd-n"><b class="num">${Math.round(n.kcal)}</b> <span class="sub">kcal</span> <b class="num">${fmtNut('p', n.p)} g</b> <span class="sub">protein</span></span>${it.estimated ? ' <span class="sub">(AI estimate)</span>' : ''}</button>`;
   }).join('')}</div>`;
