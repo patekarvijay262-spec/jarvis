@@ -1,6 +1,6 @@
 import { state, save, getDay, touch, mergeDays, dateKey, shiftKey, exportJSON, importJSON, uid } from './store.js';
 import { parseLocal } from './parser.js';
-import { NUTRIENTS, NKEYS, FOODS, findFood, makeItem, scaleN, itemNutrients, actNutrients, zeroN, addN, fmtQty, r1 as round1, dailyTargets, suggestFoods, guessQty } from './foods.js';
+import { NUTRIENTS, NKEYS, FOODS, findFood, makeItem, scaleN, itemNutrients, actNutrients, zeroN, addN, fmtQty, r1 as round1, dailyTargets, suggestFoods, guessQty, parseFood } from './foods.js';
 import { score, grade, achievements, localSuggestions, streak, skillName } from './scoring.js';
 import { GUIDELINES, SKILL_LABELS, DEFAULT_SETTINGS } from './knowledge.js';
 import * as G from './gemini.js';
@@ -357,6 +357,29 @@ function viewToday(v) {
     persist(key); render();
     toast(`Added ${food.name}: ${fmtQty(qty)} × ${food.unit}`);
   });
+  $$('.unk-retype').forEach(b => b.onclick = () => {
+    const entry = getDay(key).entries.find(e => e.id === b.dataset.e); if (!entry) return;
+    const act = entry.acts[+b.dataset.i], j = +b.dataset.j;
+    if (!act?.items?.[j]) return;
+    sheet(`<h3>What did you mean?</h3><p class="sub" style="margin:0 0 14px">Retype the food and Jarvis will try again.</p>
+      <input class="input" id="retypeInput" value="${esc(act.items[j].name)}">
+      <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn ghost" id="retypeCancel">Cancel</button><button class="btn primary" id="retypeSave">Save</button></div>`);
+    const save = () => {
+      const text = $('#retypeInput').value.trim();
+      if (!text) return;
+      const parsed = parseFood(text);
+      const newItems = parsed?.items?.length ? parsed.items : [{ name: text, desc: 'not in food table', qty: 1, n: zeroN(), protein: 0, known: false }];
+      act.items.splice(j, 1, ...newItems);
+      act.n = act.items.reduce((sum, it) => addN(sum, it.n), zeroN());
+      act.protein = round1(act.n.p);
+      act.edited = true;
+      persist(key); closeSheet(); render();
+      toast(newItems.some(it => it.known !== false) ? `Updated: ${Math.round(act.n.kcal)} kcal, ${fmtNut('p', act.n.p)} g protein` : 'Still not recognized — try different words, or tap to edit manually');
+    };
+    $('#retypeCancel').onclick = closeSheet;
+    $('#retypeSave').onclick = save;
+    $('#retypeInput').addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+  });
   $$('.del').forEach(b => b.onclick = () => {
     const d = getDay(key); d.entries = d.entries.filter(e => e.id !== b.dataset.id); persist(key); render(); toast('Entry deleted');
   });
@@ -568,7 +591,7 @@ function foodBreakdown(a, entryId, idx) {
       const picks = suggestFoods(it.name, 3);
       return `<div class="unk">
         <button class="bd warn editfood" data-e="${entryId}" data-i="${idx}">⚠ ${esc(it.name)}: not counted, tap to add</button>
-        ${picks.length ? `<div class="unk-picks"><span class="sub">Did you mean:</span>${picks.map(f => `<button class="chip unk-pick" data-e="${entryId}" data-i="${idx}" data-j="${j}" data-food="${esc(f.name)}">${esc(f.name)}</button>`).join('')}</div>` : ''}
+        <div class="unk-picks"><span class="sub">Did you mean:</span>${picks.map(f => `<button class="chip unk-pick" data-e="${entryId}" data-i="${idx}" data-j="${j}" data-food="${esc(f.name)}">${esc(f.name)}</button>`).join('')}<button class="chip unk-retype" data-e="${entryId}" data-i="${idx}" data-j="${j}">Other, let me retype</button></div>
       </div>`;
     }
     const n = itemNutrients(it);
