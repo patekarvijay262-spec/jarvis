@@ -391,21 +391,26 @@ function nutrientSources(entries) {
       const items = a.items?.length ? a.items : [{ name: a.label || 'food', n: actNutrients(a) || zeroN() }];
       for (const it of items) {
         const n = it.n && typeof it.n.kcal === 'number' ? it.n : itemNutrients(it);
-        for (const k of NKEYS) { const v = Number(n[k]) || 0; if (v > 0) by[k].push({ label: it.name, v }); }
+        for (const k of NKEYS) { const v = Number(n[k]) || 0; if (v > 0) by[k].push({ label: it.name, v, ts: e.ts }); }
       }
     }
   }
+  // Same food logged at the same time (one entry) merges into one chip; the same food eaten again later stays separate so the time is right for each.
   for (const k of NKEYS) {
     const merged = new Map();
-    for (const { label, v } of by[k]) merged.set(label, (merged.get(label) || 0) + v);
-    by[k] = [...merged.entries()].map(([label, v]) => ({ label, v })).sort((a, b) => b.v - a.v);
+    for (const { label, v, ts } of by[k]) {
+      const key = label + '@' + ts;
+      const row = merged.get(key);
+      if (row) row.v += v; else merged.set(key, { label, v, ts });
+    }
+    by[k] = [...merged.values()].sort((a, b) => b.v - a.v);
   }
   return by;
 }
 const srcList = (items, k) => {
   if (!items?.length) return '<div class="nut-src-list empty">Nothing logged yet</div>';
   const unit = nutr(k).unit, shown = items.slice(0, 5);
-  return `<div class="nut-src-list">${shown.map(it => `<span class="src-chip">${esc(it.label)} <b>${fmtNut(k, it.v)} ${unit}</b></span>`).join('')}${items.length > shown.length ? `<span class="src-chip more">+${items.length - shown.length} more</span>` : ''}</div>`;
+  return `<div class="nut-src-list">${shown.map(it => `<span class="src-chip">${esc(it.label)} <time>${timeOf(it.ts)}</time> <b>${fmtNut(k, it.v)} ${unit}</b></span>`).join('')}${items.length > shown.length ? `<span class="src-chip more">+${items.length - shown.length} more</span>` : ''}</div>`;
 };
 function nutritionCard(t, { title = 'Nutrition', entries = [] } = {}) {
   const T = t.targets, n = t.n;
@@ -1116,6 +1121,57 @@ function drawCompare(fr) {
   go2();
 }
 
+// ---------- Target questionnaire ----------
+// BMR: Mifflin-St Jeor (1990), the most accurate equation in validation studies for healthy adults.
+// TDEE = BMR × activity multiplier (Harris-Benedict activity factors, widely used alongside Mifflin-St Jeor).
+// Protein: ISSN Position Stand 2017 range (1.4–2.0 g/kg for active people), pushed toward the top
+// of that range on a cut (protect muscle in a deficit) and for muscle gain.
+const ACTIVITY_MULT = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };
+const ACTIVITY_LABEL = { sedentary: 'Sedentary (desk job, little exercise)', light: 'Light (exercise 1–3 days/week)', moderate: 'Moderate (exercise 3–5 days/week)', active: 'Active (exercise 6–7 days/week)', very_active: 'Very active (hard training or physical job)' };
+const GOAL_LABEL = { lose: 'Lose fat', general_health: 'General health', gain_muscle: 'Build muscle' };
+function targetsFromProfile({ sex, age, h, w, activity, goal }) {
+  const bmr = sex === 'female' ? (10 * w + 6.25 * h - 5 * age - 161) : (10 * w + 6.25 * h - 5 * age + 5);
+  const tdee = bmr * (ACTIVITY_MULT[activity] || 1.55);
+  const kcal = Math.round(goal === 'lose' ? Math.max(bmr * 1.1, tdee - 500) : goal === 'gain_muscle' ? tdee + 300 : tdee);
+  const proteinPerKg = goal === 'lose' ? 2.0 : goal === 'gain_muscle' ? 1.8 : 1.2;
+  return { bmr: Math.round(bmr), tdee: Math.round(tdee), kcal, proteinPerKg };
+}
+function openTargetWizard() {
+  const s = S;
+  sheet(`<h3>Personalize your targets</h3><p class="sub" style="margin:0 0 16px">A few details so Jarvis can set a realistic calorie, protein and micronutrient target for you, instead of a generic default.</p>
+    <div class="fields">
+      <label class="field">Sex (affects iron & calorie needs)<select class="select" id="wSex">
+        <option value="male" ${s.sex !== 'female' ? 'selected' : ''}>Male</option>
+        <option value="female" ${s.sex === 'female' ? 'selected' : ''}>Female</option>
+      </select></label>
+      <label class="field">Age (years)<input class="input mono" id="wAge" type="number" min="10" max="100" value="${s.age || 25}"></label>
+      <label class="field">Height (cm)<input class="input mono" id="wHeight" type="number" min="100" max="230" value="${s.heightCm || 170}"></label>
+      <label class="field">Weight (kg)<input class="input mono" id="wWeight" type="number" min="30" max="200" value="${s.weightKg || 65}"></label>
+      <label class="field">Activity level<select class="select" id="wActivity">${Object.entries(ACTIVITY_LABEL).map(([k, l]) => `<option value="${k}" ${(s.activityLevel || 'moderate') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="field">Goal<select class="select" id="wGoal">${Object.entries(GOAL_LABEL).map(([k, l]) => `<option value="${k}" ${(s.goal || 'general_health') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    </div>
+    <div id="wPreview" class="callout" style="margin-top:16px"></div>
+    <p class="sub" style="margin-top:10px">Mifflin-St Jeor equation for resting burn, standard activity multipliers for total daily spend, ISSN protein ranges by goal. A starting point, not a prescription — adjust in Profile & targets any time.</p>
+    <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn ghost" id="wCancel">Cancel</button><button class="btn primary" id="wSave">Save targets</button></div>`);
+  const read = () => ({
+    sex: $('#wSex').value, age: +$('#wAge').value || 25, h: +$('#wHeight').value || 170,
+    w: +$('#wWeight').value || 65, activity: $('#wActivity').value, goal: $('#wGoal').value
+  });
+  const preview = () => {
+    const p = read(), r = targetsFromProfile(p);
+    $('#wPreview').innerHTML = `Resting burn ≈ <b>${r.bmr} kcal</b>/day. With your activity, total daily spend ≈ <b>${r.tdee} kcal</b>.<br>We'll set <b>${r.kcal} kcal</b>/day and <b>${r.proteinPerKg} g/kg</b> protein (≈ ${Math.round(p.w * r.proteinPerKg)} g/day).`;
+  };
+  ['wSex', 'wAge', 'wHeight', 'wWeight', 'wActivity', 'wGoal'].forEach(id => { const el = $('#' + id); el.addEventListener('input', preview); el.addEventListener('change', preview); });
+  preview();
+  $('#wCancel').onclick = closeSheet;
+  $('#wSave').onclick = () => {
+    const p = read(), r = targetsFromProfile(p);
+    Object.assign(S, { sex: p.sex, age: p.age, heightCm: p.h, weightKg: p.w, activityLevel: p.activity, goal: p.goal, calorieTarget: r.kcal, proteinPerKg: r.proteinPerKg });
+    saveSettings(); closeSheet(); render();
+    toast(`Set: ${r.kcal} kcal/day, ${r.proteinPerKg} g/kg protein`);
+  };
+}
+
 // ============================================================
 // SETTINGS
 // ============================================================
@@ -1147,7 +1203,8 @@ function viewSettings(v) {
     </section>
 
     <section class="card c-12" id="sec-profile">
-      <div class="card-h"><h2>Profile & targets</h2><span class="sub">Defaults follow WHO, ISSN and sleep-science guidance</span></div>
+      <div class="card-h"><h2>Profile & targets</h2><button class="btn sm primary" id="wizOpen">${I.spark} Calculate my targets</button></div>
+      <p class="sub" style="margin:-8px 0 14px">Defaults follow WHO, ISSN and sleep-science guidance. Not sure what your numbers should be? Answer a few questions and Jarvis works it out.</p>
       <div class="fields">
         ${field('name', 'Name', 'text')}
         ${field('weightKg', 'Body weight (kg)', 'number', 1)}
@@ -1161,7 +1218,7 @@ function viewSettings(v) {
         ${field('meditationTarget', 'Meditation (min/day)', 'number', 1)}
         ${field('screenLimit', 'Leisure screen limit (h)', 'number', 0.5)}
       </div>
-      <p class="sub" style="margin-top:12px">Daily food targets: ${(() => { const T = dailyTargets(S); return `<b>${T.kcal} kcal</b>, protein <b>${T.p} g</b>, carbs <b>${T.c} g</b>, fat <b>${T.f} g</b>, fibre <b>${T.fib} g</b>, iron <b>${T.fe} mg</b>, calcium <b>${T.ca} mg</b>, vitamin C <b>${T.vc} mg</b>, B12 <b>${T.b12} µg</b>`; })()}.<br>Protein: ISSN suggests 1.4–2.0 g/kg for active people. Calories: ICMR-NIN 2020 gives about 2100 (desk-bound) to 2700 (moderately active) for a 65 kg man. Carbs 55% and fat 25% of calories; micronutrients are ICMR-NIN 2020 RDAs for adult men.</p>
+      <p class="sub" style="margin-top:12px">Daily food targets: ${(() => { const T = dailyTargets(S); return `<b>${T.kcal} kcal</b>, protein <b>${T.p} g</b>, carbs <b>${T.c} g</b>, fat <b>${T.f} g</b>, fibre <b>${T.fib} g</b>, iron <b>${T.fe} mg</b>, calcium <b>${T.ca} mg</b>, vitamin C <b>${T.vc} mg</b>, B12 <b>${T.b12} µg</b>`; })()}.<br>Protein: ISSN suggests 1.4–2.0 g/kg for active people. Carbs 55% and fat 25% of calories. Iron and calcium are personalized from your sex and age below; the rest follow ICMR-NIN 2020 adult RDAs.</p>
       <hr class="sep" style="margin:14px 0">
       <span class="eyebrow">Skills & habits tracked</span>
       <div class="row" style="margin-top:10px">${Object.entries(SKILL_LABELS).map(([k, l]) => `<button class="btn sm ${S.skills.includes(k) ? 'primary' : ''} sk" data-k="${k}">${S.skills.includes(k) ? '✓ ' : ''}${l}</button>`).join('')}</div>
@@ -1230,6 +1287,7 @@ function viewSettings(v) {
     if (['weightKg', 'proteinPerKg', 'calorieTarget'].includes(k)) render();
   });
   $$('.sk').forEach(b => b.onclick = () => { const k = b.dataset.k; S.skills = S.skills.includes(k) ? S.skills.filter(x => x !== k) : [...S.skills, k]; saveSettings(); render(); });
+  $('#wizOpen').onclick = openTargetWizard;
 
   // Gemini
   $('#gTest').onclick = async () => {

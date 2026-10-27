@@ -219,15 +219,22 @@ export function foodReference() {
   return FOODS.map(f => `${f.name} (1 serving = ${f.unit}, ${f.g} g)`).join('; ');
 }
 
-// ---------- Daily targets (ICMR-NIN 2020 RDA, adult man) ----------
+// ---------- Daily targets (ICMR-NIN 2020 RDA) ----------
+// Iron and calcium are personalized by sex/age: menstruating women need far more iron
+// (higher blood loss), and calcium needs rise after 50 (bone density). Everything else
+// follows the ICMR-NIN 2020 adult baseline until a fuller RDA table is wired in.
 export function dailyTargets(s) {
   const kcal = Number(s.calorieTarget) || 2400;
+  const female = s.sex === 'female';
+  const age = Number(s.age) || 30;
   return {
     kcal,
     p: Math.round(s.weightKg * s.proteinPerKg),
     c: Math.round(kcal * 0.55 / 4),
     f: Math.round(kcal * 0.25 / 9),
     fib: Math.round(kcal / 1000 * 15),
-    fe: 19, ca: 1000, vc: 80, b12: 2.5
+    fe: female && age < 50 ? 29 : 19,
+    ca: age >= 50 ? 1200 : 1000,
+    vc: 80, b12: 2.5
   };
 }
