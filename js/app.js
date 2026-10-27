@@ -1,6 +1,6 @@
 import { state, save, getDay, touch, mergeDays, dateKey, shiftKey, exportJSON, importJSON, uid } from './store.js';
 import { parseLocal } from './parser.js';
-import { NUTRIENTS, FOODS, findFood, makeItem, scaleN, itemNutrients, zeroN, addN, fmtQty, r1 as round1, dailyTargets } from './foods.js';
+import { NUTRIENTS, NKEYS, FOODS, findFood, makeItem, scaleN, itemNutrients, actNutrients, zeroN, addN, fmtQty, r1 as round1, dailyTargets } from './foods.js';
 import { score, grade, achievements, localSuggestions, streak, skillName } from './scoring.js';
 import { GUIDELINES, SKILL_LABELS, DEFAULT_SETTINGS } from './knowledge.js';
 import * as G from './gemini.js';
@@ -16,7 +16,7 @@ const today = () => dateKey();
 
 const ui = {
   view: 'today', date: today(), range: 7, planDay: 'today', friend: null,
-  cal: {}, friends: null, profile: null, busy: {}, recognizing: false
+  cal: {}, friends: null, profile: null, busy: {}, recognizing: false, showNutrientSources: false
 };
 
 // ---------- Icons ----------
@@ -299,7 +299,7 @@ function viewToday(v) {
 
     </div>
 
-    <section class="card c-5" id="nutritionCard">${nutritionCard(t)}</section>
+    <section class="card c-5" id="nutritionCard">${nutritionCard(t, { entries: day.entries })}</section>
 
     <section class="card c-7">
       <div class="card-h"><h2>${isToday ? 'Today’s log' : 'Log'}</h2><span class="sub">${day.entries.length} entr${day.entries.length === 1 ? 'y' : 'ies'}</span></div>
@@ -337,6 +337,8 @@ function viewToday(v) {
     </div>
   </div>`;
 
+  $('#nutSrcToggle')?.addEventListener('change', e => { ui.showNutrientSources = e.target.checked; render(); });
+  $('.nut-suggest')?.addEventListener('click', () => openNutrientSuggestions(t));
   $('#openReport').onclick = () => go('report');
   $('#editTargets').onclick = () => { go('settings'); setTimeout(() => $('#sec-profile')?.scrollIntoView({ behavior: 'smooth' }), 50); };
   $('#logBtn').onclick = () => submitLog();
@@ -380,7 +382,32 @@ const MACROS = [['p', 'Protein', 4], ['c', 'Carbs', 4], ['f', 'Fat', 9]];
 const MICROS = ['fib', 'fe', 'ca', 'vc', 'b12'];
 const nutr = k => NUTRIENTS.find(x => x.k === k);
 const fmtNut = (k, v) => (k === 'kcal' || k === 'ca' || v >= 100 ? Math.round(v) : v >= 10 ? Math.round(v) : (Math.round(v * 10) / 10));
-function nutritionCard(t, { title = 'Nutrition' } = {}) {
+// Which logged foods contributed to each nutrient, most first.
+function nutrientSources(entries) {
+  const by = Object.fromEntries(NKEYS.map(k => [k, []]));
+  for (const e of entries || []) {
+    for (const a of e.acts || []) {
+      if (a.type !== 'food') continue;
+      const items = a.items?.length ? a.items : [{ name: a.label || 'food', n: actNutrients(a) || zeroN() }];
+      for (const it of items) {
+        const n = it.n && typeof it.n.kcal === 'number' ? it.n : itemNutrients(it);
+        for (const k of NKEYS) { const v = Number(n[k]) || 0; if (v > 0) by[k].push({ label: it.name, v }); }
+      }
+    }
+  }
+  for (const k of NKEYS) {
+    const merged = new Map();
+    for (const { label, v } of by[k]) merged.set(label, (merged.get(label) || 0) + v);
+    by[k] = [...merged.entries()].map(([label, v]) => ({ label, v })).sort((a, b) => b.v - a.v);
+  }
+  return by;
+}
+const srcList = (items, k) => {
+  if (!items?.length) return '<div class="nut-src-list empty">Nothing logged yet</div>';
+  const unit = nutr(k).unit, shown = items.slice(0, 5);
+  return `<div class="nut-src-list">${shown.map(it => `<span class="src-chip">${esc(it.label)} <b>${fmtNut(k, it.v)} ${unit}</b></span>`).join('')}${items.length > shown.length ? `<span class="src-chip more">+${items.length - shown.length} more</span>` : ''}</div>`;
+};
+function nutritionCard(t, { title = 'Nutrition', entries = [] } = {}) {
   const T = t.targets, n = t.n;
   const R = 54, SW = 14, C = 2 * Math.PI * R;
   const macroK = MACROS.map(([k, , kc]) => n[k] * kc);
@@ -392,10 +419,19 @@ function nutritionCard(t, { title = 'Nutrition' } = {}) {
     off += len; return seg;
   }).join('');
   const kcalPct = Math.round(n.kcal / T.kcal * 100);
+  const src = ui.showNutrientSources ? nutrientSources(entries) : null;
   return `
     <div class="card-h">
       <h2>${title}</h2>
       <span class="sub nut-src" tabindex="0" title="Estimates from IFCT 2017 and USDA for home-style portions. Targets: ICMR-NIN 2020. Tap a food entry to adjust portions.">${t.meals ? `${t.meals} meal${t.meals === 1 ? '' : 's'} logged` : 'No meals logged yet'} ${I.info}</span>
+    </div>
+    <div class="nut-tools">
+      <label class="switch" title="Show which foods contributed to each nutrient">
+        <input type="checkbox" id="nutSrcToggle" ${ui.showNutrientSources ? 'checked' : ''}>
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+        <span class="switch-label">Show sources</span>
+      </label>
+      <button type="button" class="btn sm ghost nut-suggest">${I.spark} What to eat</button>
     </div>
     <div class="nut-top">
       <svg class="donut" viewBox="0 0 128 128" role="img" aria-label="${n.kcal} of ${T.kcal} kilocalories">
@@ -406,7 +442,8 @@ function nutritionCard(t, { title = 'Nutrition' } = {}) {
       <div class="macros">
         ${MACROS.map(([k, label]) => `<div class="macro" style="--c:var(--${k === 'p' ? 'protein' : k === 'c' ? 'carbs' : 'fat'})">
           <div class="t-top"><b>${label}</b><span>${fmtNut(k, n[k])}/${T[k]} g</span></div>
-          <div class="meter"><i style="width:${Math.min(100, n[k] / T[k] * 100)}%"></i></div></div>`).join('')}
+          <div class="meter"><i style="width:${Math.min(100, n[k] / T[k] * 100)}%"></i></div>
+          ${src ? srcList(src[k], k) : ''}</div>`).join('')}
       </div>
     </div>
     ${t.meals ? `<span class="sub nut-pct">${kcalPct}% of your calories so far</span>` : ''}
@@ -414,8 +451,49 @@ function nutritionCard(t, { title = 'Nutrition' } = {}) {
     <div class="micros">
       ${MICROS.map(k => { const pct = Math.round(n[k] / T[k] * 100); const d = nutr(k); return `<div class="micro ${pct >= 100 ? 'met' : ''}">
         <div class="t-top"><b>${d.label}</b><span>${fmtNut(k, n[k])}/${T[k]} ${d.unit}</span></div>
-        <div class="meter"><i style="width:${Math.min(100, pct)}%"></i></div></div>`; }).join('')}
+        <div class="meter"><i style="width:${Math.min(100, pct)}%"></i></div>
+        ${src ? srcList(src[k], k) : ''}</div>`; }).join('')}
     </div>`;
+}
+
+// ---------- "What to eat" suggestions (rule-based, from the food table) ----------
+function nutrientGaps(t) {
+  const T = t.targets, n = t.n;
+  return NKEYS.filter(k => k !== 'kcal')
+    .map(k => ({ k, gap: T[k] - n[k], T: T[k] }))
+    .filter(g => g.T > 0 && g.gap / g.T > 0.08) // more than ~8% short
+    .sort((a, b) => (b.gap / b.T) - (a.gap / a.T));
+}
+function pickFoodsFor(k, gap) {
+  const idx = NKEYS.indexOf(k);
+  return FOODS
+    .filter(f => f.n[idx] > 0 && !f.drink)
+    .map(f => {
+      const per = f.n[idx];
+      const servings = Math.min(3, Math.max(0.5, Math.round((gap / per) * 2) / 2));
+      return { food: f, servings, covers: per * servings, per };
+    })
+    .sort((a, b) => b.per - a.per)
+    .slice(0, 3);
+}
+function openNutrientSuggestions(t) {
+  const gaps = nutrientGaps(t);
+  if (!gaps.length) {
+    sheet(`<h3>You're on track</h3><p class="sub">Every nutrient is close to target today. Nice work.</p>
+      <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn primary" id="sgClose">Close</button></div>`);
+    $('#sgClose').onclick = closeSheet; return;
+  }
+  const rows = gaps.slice(0, 6).map(g => {
+    const d = nutr(g.k), picks = pickFoodsFor(g.k, g.gap);
+    return `<div class="gap-row">
+      <div class="gap-h"><b>${d.label}</b><span class="sub">${fmtNut(g.k, g.gap)} ${d.unit} short of ${fmtNut(g.k, g.T)} ${d.unit}</span></div>
+      <div class="gap-picks">${picks.map(p => `<span class="pick-chip">${fmtQty(p.servings)}× ${esc(p.food.name)} <span class="sub">(${esc(p.food.unit)})</span><b>+${fmtNut(g.k, p.covers)} ${d.unit}</b></span>`).join('')}</div>
+    </div>`;
+  }).join('');
+  sheet(`<h3>Close today's gaps</h3><p class="sub" style="margin:0 0 14px">From your food table — add your mess menu in Settings for suggestions from what's actually served.</p>
+    <div class="stack">${rows}</div>
+    <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn primary" id="sgClose">Got it</button></div>`);
+  $('#sgClose').onclick = closeSheet;
 }
 
 const fmtN = n => (n == null ? '—' : Number.isInteger(n) ? n : (+n).toFixed(1));
@@ -654,7 +732,7 @@ function viewReport(v) {
     </section>
 
     <div class="c-5 col">
-    <section class="card">${nutritionCard(sc.totals)}</section>
+    <section class="card">${nutritionCard(sc.totals, { entries: day.entries })}</section>
     <section class="card">
       <div class="card-h"><h2>Today in numbers</h2></div>
       <div class="targets">
@@ -684,6 +762,8 @@ function viewReport(v) {
   </div>`;
 
   $('#regen').onclick = () => generateReport(key);
+  $('#nutSrcToggle')?.addEventListener('change', e => { ui.showNutrientSources = e.target.checked; render(); });
+  $('.nut-suggest')?.addEventListener('click', () => openNutrientSuggestions(sc.totals));
   $$('.addcal').forEach(b => b.onclick = async () => {
     const s = rep.suggestions[+b.dataset.i]; const slot = rep.slots[s.slotIndex];
     b.disabled = true;
