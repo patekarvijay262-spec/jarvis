@@ -190,8 +190,7 @@ function matchFoods(part) {
       return makeItem(h.f, qty);
     }
     if (grams) { const gr = parseFloat(grams[1]); return makeItem(h.f, gr / h.f.g, `${gr} g`); }
-    if (ml && h.f.drink !== undefined) { const v = parseFloat(ml[1]); return makeItem(h.f, v / h.f.g, `${v} ml`); }
-    if (ml && /milk|lassi|buttermilk|milkshake|coconut water/.test(h.f.name)) { const v = parseFloat(ml[1]); return makeItem(h.f, v / h.f.g, `${v} ml`); }
+    if (ml) { const v = parseFloat(ml[1]); return makeItem(h.f, v / h.f.g, `${v} ml`); }
     const servings = qty * size;
     return makeItem(h.f, servings, `${sizeLabel ? sizeLabel + ' ' : ''}${qty !== 1 ? fmtQty(qty) + ' × ' : ''}${h.f.unit}`);
   });

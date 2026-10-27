@@ -36,7 +36,8 @@ const I = {
   sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   moon: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>',
   auto: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>',
-  log: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>'
+  log: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  info: '<svg viewBox="0 0 24 24" class="info-ic"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 8v.01"/></svg>'
 };
 
 const NAV = [
@@ -392,7 +393,10 @@ function nutritionCard(t, { title = 'Nutrition' } = {}) {
   }).join('');
   const kcalPct = Math.round(n.kcal / T.kcal * 100);
   return `
-    <div class="card-h"><h2>${title}</h2><span class="sub">${t.meals ? `${t.meals} meal${t.meals === 1 ? '' : 's'} logged` : 'No meals logged yet'}</span></div>
+    <div class="card-h">
+      <h2>${title}</h2>
+      <span class="sub nut-src" tabindex="0" title="Estimates from IFCT 2017 and USDA for home-style portions. Targets: ICMR-NIN 2020. Tap a food entry to adjust portions.">${t.meals ? `${t.meals} meal${t.meals === 1 ? '' : 's'} logged` : 'No meals logged yet'} ${I.info}</span>
+    </div>
     <div class="nut-top">
       <svg class="donut" viewBox="0 0 128 128" role="img" aria-label="${n.kcal} of ${T.kcal} kilocalories">
         <circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--track)" stroke-width="${SW}"/>${segs}
@@ -403,15 +407,15 @@ function nutritionCard(t, { title = 'Nutrition' } = {}) {
         ${MACROS.map(([k, label]) => `<div class="macro" style="--c:var(--${k === 'p' ? 'protein' : k === 'c' ? 'carbs' : 'fat'})">
           <div class="t-top"><b>${label}</b><span>${fmtNut(k, n[k])}/${T[k]} g</span></div>
           <div class="meter"><i style="width:${Math.min(100, n[k] / T[k] * 100)}%"></i></div></div>`).join('')}
-        <span class="sub">${t.meals ? `${kcalPct}% of your calories so far` : 'Log a meal to fill this in'}</span>
       </div>
     </div>
+    ${t.meals ? `<span class="sub nut-pct">${kcalPct}% of your calories so far</span>` : ''}
+    <div class="micros-head"><span class="eyebrow">Micronutrients</span></div>
     <div class="micros">
       ${MICROS.map(k => { const pct = Math.round(n[k] / T[k] * 100); const d = nutr(k); return `<div class="micro ${pct >= 100 ? 'met' : ''}">
         <div class="t-top"><b>${d.label}</b><span>${fmtNut(k, n[k])}/${T[k]} ${d.unit}</span></div>
         <div class="meter"><i style="width:${Math.min(100, pct)}%"></i></div></div>`; }).join('')}
-    </div>
-    <p class="nut-note">Estimates from IFCT 2017 and USDA for home-style portions. Targets: ICMR-NIN 2020. Tap a food entry to adjust portions.</p>`;
+    </div>`;
 }
 
 const fmtN = n => (n == null ? '—' : Number.isInteger(n) ? n : (+n).toFixed(1));
