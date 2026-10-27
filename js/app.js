@@ -495,10 +495,37 @@ function openNutrientSuggestions(t) {
       <div class="gap-picks">${picks.map(p => `<span class="pick-chip">${fmtQty(p.servings)}× ${esc(p.food.name)} <span class="sub">(${esc(p.food.unit)})</span><b>+${fmtNut(g.k, p.covers)} ${d.unit}</b></span>`).join('')}</div>
     </div>`;
   }).join('');
-  sheet(`<h3>Close today's gaps</h3><p class="sub" style="margin:0 0 14px">From your food table — add your mess menu in Settings for suggestions from what's actually served.</p>
+  const messSection = !S.messMenu
+    ? `<p class="sub">Add your mess menu in <a href="#" id="toMess">Settings</a> and Jarvis can suggest from what's actually being served.</p>`
+    : !G.provider(S)
+      ? `<p class="sub">Add a Gemini key in Settings to get suggestions from your mess menu.</p>`
+      : `<button type="button" class="btn sm" id="messAsk">${I.spark} What's on the menu today</button><div id="messPicks" class="stack" style="margin-top:12px"></div>`;
+  sheet(`<h3>Close today's gaps</h3><p class="sub" style="margin:0 0 14px">From your food table.</p>
     <div class="stack">${rows}</div>
+    <hr class="sep" style="margin:18px 0">
+    <h3 style="font-size:15px;margin:0 0 10px">From your mess menu</h3>
+    ${messSection}
     <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn primary" id="sgClose">Got it</button></div>`);
   $('#sgClose').onclick = closeSheet;
+  $('#toMess')?.addEventListener('click', e => { e.preventDefault(); closeSheet(); go('settings'); setTimeout(() => $('#sec-mess')?.scrollIntoView({ behavior: 'smooth' }), 50); });
+  $('#messAsk')?.addEventListener('click', async () => {
+    const btn = $('#messAsk'); btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Reading the menu`;
+    try {
+      const weekday = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const timeLabel = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const res = await G.messMenuSuggestions(S, {
+        menuText: S.messMenu, weekday, timeLabel,
+        gaps: gaps.map(g => ({ label: nutr(g.k).label, gap: fmtNut(g.k, g.gap), unit: nutr(g.k).unit }))
+      });
+      const picks = Array.isArray(res?.picks) ? res.picks : [];
+      $('#messPicks').innerHTML = picks.length
+        ? picks.map(p => `<div class="gap-row"><div class="gap-h"><b>${esc(p.meal || 'Meal')}</b></div>
+            <div class="gap-picks">${(p.items || []).map(i => `<span class="pick-chip">${esc(i)}</span>`).join('')}</div>
+            ${p.why ? `<p class="sub" style="margin:8px 0 0">${esc(p.why)}</p>` : ''}</div>`).join('')
+        : `<p class="sub">No clear match in today's remaining meals for your gaps.</p>`;
+    } catch (e) { $('#messPicks').innerHTML = `<p class="sub">${esc((e.message || 'Something went wrong').slice(0, 140))}</p>`; }
+    finally { btn.remove(); }
+  });
 }
 
 const fmtN = n => (n == null ? '—' : Number.isInteger(n) ? n : (+n).toFixed(1));
@@ -609,6 +636,14 @@ async function refineLogEntry(key, id, text) {
   entry.acts = clean(acts); entry.via = G.provider(S);
   persist(key);
   render();
+}
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(new Error('Could not read the file'));
+    r.readAsDataURL(file);
+  });
 }
 
 function setupMic() {
@@ -1224,6 +1259,17 @@ function viewSettings(v) {
       <div class="row" style="margin-top:10px">${Object.entries(SKILL_LABELS).map(([k, l]) => `<button class="btn sm ${S.skills.includes(k) ? 'primary' : ''} sk" data-k="${k}">${S.skills.includes(k) ? '✓ ' : ''}${l}</button>`).join('')}</div>
     </section>
 
+    <section class="card c-12" id="sec-mess">
+      <div class="card-h"><h2>Mess menu</h2><span class="sub">${S.messMenu ? 'Saved — Jarvis can suggest from it' : 'Not added yet'}</span></div>
+      <p class="sub" style="margin:0 0 12px">Paste your weekly mess menu, or photograph it and Jarvis reads it for you. Used by “What to eat” on the Nutrition card to suggest dishes that are actually on offer.</p>
+      <label class="field">Weekly menu<textarea class="input mono" id="messMenu" rows="9" placeholder="Monday&#10;Breakfast: poha, boiled egg, tea&#10;Lunch: dal, rice, roti, aloo sabji, salad&#10;…">${esc(S.messMenu)}</textarea></label>
+      <div class="row" style="margin-top:10px">
+        <label class="btn sm" for="messPhoto">${I.spark} Read from a photo</label><input type="file" id="messPhoto" accept="image/*" hidden>
+        <span class="spacer"></span>
+        <button class="btn sm primary" id="messSave">Save menu</button>
+      </div>
+    </section>
+
     <section class="card c-12" id="sec-cloud">
       <div class="card-h"><h2>Sync, friends & Google Calendar</h2><span class="status ${u ? 'ok' : ''}">${u ? `● Signed in as ${esc(u.email)}` : C.cloudReady() ? '○ Ready — sign in below' : '○ Not set up'}</span></div>
       <div class="grid" style="gap:20px">
@@ -1288,6 +1334,21 @@ function viewSettings(v) {
   });
   $$('.sk').forEach(b => b.onclick = () => { const k = b.dataset.k; S.skills = S.skills.includes(k) ? S.skills.filter(x => x !== k) : [...S.skills, k]; saveSettings(); render(); });
   $('#wizOpen').onclick = openTargetWizard;
+
+  // Mess menu
+  $('#messSave').onclick = () => { S.messMenu = $('#messMenu').value.trim(); saveSettings(); render(); toast('Mess menu saved'); };
+  $('#messPhoto').onchange = async e => {
+    const file = e.target.files[0]; if (!file) return;
+    if (!G.provider(S)) { toast('Add a Gemini key above first, or paste the menu as text.', 4000); e.target.value = ''; return; }
+    toast('Reading the menu photo…', 6000);
+    try {
+      const b64 = await fileToBase64(file);
+      const text = await G.readMessMenuImage(S, b64, file.type);
+      $('#messMenu').value = text;
+      toast('Menu read — check it looks right, then Save');
+    } catch (err) { toast(`Couldn’t read that photo: ${err.message.slice(0, 80)}`, 4500); }
+    e.target.value = '';
+  };
 
   // Gemini
   $('#gTest').onclick = async () => {

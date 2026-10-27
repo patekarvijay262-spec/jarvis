@@ -138,6 +138,7 @@ export const DEFAULT_SETTINGS = {
   geminiModel: '',
   firebaseConfig: '',
   reminderIds: {},
+  messMenu: '',
   shareScores: true,
   notifications: false,
   theme: 'system'

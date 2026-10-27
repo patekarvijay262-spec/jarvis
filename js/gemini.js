@@ -118,3 +118,37 @@ export async function morningPlan(settings, payload) {
 Return {"focus":"one line","blocks":[{"slot_index":number,"activity":"what to do","minutes":number}]} with up to 4 blocks placed only in free_slots_today.`;
   return generate(settings, system, prompt);
 }
+
+// ---------- Mess menu ----------
+async function generateWithImage(settings, system, prompt, imageBase64, mimeType) {
+  const key = settings.geminiKey;
+  if (!key) throw new Error('Add a Gemini key in Settings to read a menu photo, or paste the menu as text instead.');
+  const model = settings.geminiModel || FALLBACK_MODEL;
+  const res = await fetch(`${BASE}/models/${model}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType, data: imageBase64 } }] }],
+      generationConfig: { temperature: 0.1 }
+    })
+  });
+  if (!res.ok) throw new Error(await errText(res));
+  const data = await res.json();
+  return (data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '').trim();
+}
+
+// Transcribe a photographed weekly mess menu into plain text the rest of the app can read.
+export async function readMessMenuImage(settings, imageBase64, mimeType) {
+  const system = 'You transcribe a hostel/mess weekly food menu photo into clean plain text. Keep the structure: each day of the week, then its meals (breakfast, lunch, snacks/tiffin, dinner, etc. as printed) and the dishes under each, using the exact dish names as printed. No markdown formatting, no commentary — just the transcribed menu as plain text.';
+  const text = await generateWithImage(settings, system, 'Transcribe this weekly mess menu.', imageBase64, mimeType);
+  if (!text) throw new Error('Could not read any text from that photo. Try a clearer photo or paste the menu as text.');
+  return text;
+}
+
+// Which dishes from the mess menu, for meals still ahead today, help close specific nutrient gaps.
+export async function messMenuSuggestions(settings, payload) {
+  const system = `You help a hostel student pick what to eat from today's mess menu to close specific nutrient gaps for the day. Only suggest dishes that literally appear in the menu text given — never invent a dish. Prefer dishes genuinely rich in the gap nutrient (dal/paneer/eggs/chicken for protein and iron; citrus/amla/tomato/guava for vitamin C; milk/curd/paneer for calcium; fruit, salad, whole grains and legumes for fibre). Only suggest meals that haven't happened yet today, given the current time.`;
+  const prompt = `Weekly mess menu (as transcribed, may be messy):\n"""${payload.menuText}"""\n\nToday is ${payload.weekday}, current time ${payload.timeLabel}.\nNutrient gaps still to close today: ${payload.gaps.map(g => `${g.label} (${g.gap} ${g.unit} short)`).join(', ') || 'none significant'}.\n\nReturn {"picks":[{"meal":"name of the upcoming meal, e.g. Lunch","items":["1-3 dish names, exactly as in the menu"],"why":"1 short sentence: which gap(s) this helps and why"}]} covering only meals still ahead today. If nothing in today's remaining menu clearly helps, return {"picks":[]}.`;
+  return generate(settings, system, prompt, 'quick');
+}
