@@ -595,7 +595,7 @@ function setupAskJarvis() {
   const send = async () => {
     const text = input.value.trim();
     if (!text) return;
-    const t = scoreOf(ui.date).totals;
+    const key = ui.date, sc = scoreOf(key), t = sc.totals, day = getDay(key);
     chatHistory.push({ role: 'user', text });
     input.value = '';
     log.innerHTML = chatBubbles(); log.scrollTop = log.scrollHeight;
@@ -607,7 +607,16 @@ function setupAskJarvis() {
     log.innerHTML = chatBubbles() + `<div class="chat-msg jarvis typing"><span class="spin"></span></div>`;
     log.scrollTop = log.scrollHeight;
     try {
-      const summary = { targets: t.targets, so_far: t.n, meals_logged: t.meals };
+      const summary = {
+        scores: { body: sc.body, brain: sc.brain, mind: sc.mind, overall: sc.overall },
+        nutrition: { targets: t.targets, so_far: t.n, meals_logged: t.meals },
+        exercise: { active_min: t.activeMin, target_min: S.exerciseTarget, sun_min: t.sunMin },
+        sleep: { hours: t.sleep, target_hours: S.sleepTarget },
+        water: { litres: t.water, target_litres: S.waterTarget },
+        brain_work: { deep_work_min: t.deepMin, target_deep_work_min: S.deepWorkTarget, reading_min: t.readingMin, target_reading_min: S.readingTarget, pages: t.pages, skills_done: t.skills },
+        mind: { mood: t.mood, energy: t.energy, meditation_min: t.skills.meditation, target_meditation_min: S.meditationTarget, screen_hours: t.screen, screen_limit_hours: S.screenLimit, social: t.social },
+        log_today: day.entries.map(e => e.text)
+      };
       const reply = await G.askCoach(S, { summary, menuText: S.messMenu || null, history: chatHistory.slice(0, -1), question: text });
       chatHistory.push({ role: 'jarvis', text: reply || "Hmm, I didn't get that — try asking differently?" });
     } catch (e) {
