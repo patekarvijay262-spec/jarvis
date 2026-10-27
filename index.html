@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=18">
+  <link rel="stylesheet" href="css/styles.css?v=19">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" defer></script>
 </head>
 <body>
@@ -53,7 +53,23 @@
   <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
   <div class="sheet" id="sheet" role="dialog" aria-modal="true" hidden></div>
 
-  <script type="module" src="js/app.js?v=18"></script>
+  <button class="chat-fab" id="chatFab" aria-label="Ask Jarvis" aria-expanded="false">
+    <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H5l1.6-3.2A8 8 0 1 1 21 12z"/></svg>
+  </button>
+  <div class="chat-pop" id="chatPop" role="dialog" aria-label="Ask Jarvis" hidden>
+    <div class="chat-pop-head"><b>Ask Jarvis</b><button class="icon-btn" id="chatPopClose" aria-label="Close">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button></div>
+    <div class="chat-log" id="chatLog"></div>
+    <div class="row chat-input-row">
+      <input class="input" id="chatInput" placeholder="e.g. I want to build muscle, what should I eat tonight?">
+      <button class="btn primary sm" id="chatSend" aria-label="Send">
+        <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js?v=19"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
