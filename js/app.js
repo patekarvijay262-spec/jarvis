@@ -499,24 +499,33 @@ function editFood(key, entryId, idx) {
   };
 }
 
-async function submitLog() {
+function submitLog() {
   const ta = $('#logText'); const text = ta.value.trim();
   if (!text) { ta.focus(); return; }
-  const btn = $('#logBtn'); btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Reading`;
-  let acts, via = 'local';
-  if (G.provider(S)) {
-    try { acts = await G.parseWithGemini(S, text); via = G.provider(S); }
-    catch (e) { console.warn(e); toast(`${G.providerName(S)} didn’t answer (${e.message.slice(0, 60)}). Used offline parser.`, 4000); }
-  }
-  if (!acts || !acts.length) acts = parseLocal(text);
-  acts = acts.map(a => Object.fromEntries(Object.entries(a).filter(([, v]) => v != null && v !== '')));
+  // Show it instantly with the offline parser; refine quietly with AI in the background so logging never feels stuck.
+  ta.value = '';
   const key = ui.date;
   const ts = key === today() ? Date.now() : new Date(key + 'T20:00:00').getTime();
-  getDay(key).entries.push({ id: uid(), ts, text, acts, via });
+  const id = uid();
+  const localActs = clean(parseLocal(text));
+  getDay(key).entries.push({ id, ts, text, acts: localActs, via: 'local' });
   persist(key);
-  ta.value = '';
   render();
-  toast(`Logged ${acts.length} activit${acts.length === 1 ? 'y' : 'ies'}`);
+  $('#logText')?.focus();
+  toast(`Logged ${localActs.length} activit${localActs.length === 1 ? 'y' : 'ies'}`);
+  if (G.provider(S)) refineLogEntry(key, id, text);
+}
+const clean = acts => acts.map(a => Object.fromEntries(Object.entries(a).filter(([, v]) => v != null && v !== '')));
+async function refineLogEntry(key, id, text) {
+  let acts;
+  try { acts = await G.parseWithGemini(S, text); }
+  catch (e) { console.warn(e); return; }
+  if (!acts || !acts.length) return;
+  const entry = getDay(key).entries.find(e => e.id === id);
+  if (!entry) return; // deleted or edited while we were waiting
+  entry.acts = clean(acts); entry.via = G.provider(S);
+  persist(key);
+  render();
 }
 
 function setupMic() {
