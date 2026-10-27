@@ -56,7 +56,7 @@ export function lines(el, labels, series, opts = {}) {
     labels,
     datasets: series.map((s, i) => ({
       label: s.name, data: s.data, borderColor: s.color, borderWidth: s.width || 2.2, tension: 0.35,
-      pointRadius: ctx => ctx.dataIndex === s.data.length - 1 ? 4 : 0, pointBackgroundColor: s.color, pointHoverRadius: 5,
+      pointRadius: ctx => { const i = ctx.dataIndex, d = s.data; const lone = d[i] != null && d[i - 1] == null && d[i + 1] == null; return i === d.length - 1 || lone ? 4 : 0; }, pointBackgroundColor: s.color, pointHoverRadius: 5,
       fill: s.fill ? { target: 'origin' } : false, backgroundColor: ctx => fade(ctx, s.color), borderDash: s.dash || [], spanGaps: true
     }))
   }, { scales: axes(p, { max: opts.max, suffix: opts.suffix || '' }) });
