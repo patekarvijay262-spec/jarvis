@@ -413,6 +413,33 @@ textarea.mono, input.mono { font-family: ui-monospace, 'SF Mono', Menlo, Consola
 .nut-src { display: inline-flex; align-items: center; gap: 4px; cursor: help; }
 .info-ic { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; vertical-align: -2px; }
 
+/* Toggle switch */
+.nut-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -2px 0 14px; flex-wrap: wrap; }
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { position: relative; width: 34px; height: 20px; border-radius: 99px; background: var(--track); transition: background-color .16s var(--ease); flex: none; }
+.switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .2); transition: transform .16s var(--ease); }
+.switch input:checked + .switch-track { background: var(--accent); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(14px); background: var(--accent-fg); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch-label { font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* Per-nutrient food source breakdown */
+.nut-src-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.nut-src-list.empty { font-size: 12px; color: var(--faint); }
+.src-chip { display: inline-flex; align-items: baseline; gap: 4px; font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.src-chip b { font-family: var(--font-display); color: var(--fg); font-weight: 700; }
+.src-chip.more { color: var(--faint); font-style: italic; }
+
+/* "What to eat" gap suggestions */
+.gap-row { padding: 14px; border-radius: 14px; background: var(--surface-2); }
+.gap-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.gap-h b { font-size: 14.5px; }
+.gap-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pick-chip { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12.5px; padding: 5px 10px; border-radius: 999px; background: var(--surface); color: var(--fg); font-weight: 500; }
+.pick-chip b { font-family: var(--font-display); color: var(--good); font-weight: 700; }
+.pick-chip .sub { font-size: 11px; color: var(--muted); }
+
 /* Food chips are buttons now */
 button.bd { border: 0; cursor: pointer; font: inherit; font-size: 13px; color: inherit; text-align: left; }
 button.bd:hover { box-shadow: 0 0 0 1.5px var(--accent) inset; }
