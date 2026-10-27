@@ -21,39 +21,44 @@ const F = (name, re, g, unit, n, extra = {}) => ({ name, re, g, unit, n, p: n[1]
 
 export const FOODS = [
   F('whey protein', /whey|protein shake|protein powder/, 30, 'scoop', [120, 24, 3, 1.5, 0, 0.5, 120, 0, 0.6]),
+  F('soyabean curry', /soyabean (?:masala|chilli|curry)|soya (?:masala|chilli|curry)/, 150, 'bowl', [200, 19, 13, 8, 5.5, 3, 50, 2, 0]),
   F('soya chunks', /soya|soy chunks?|nutrela/, 25, 'bowl (25 g dry)', [86, 13, 8, 0.1, 3, 2.3, 60, 0, 0]),
   F('egg white', /egg whites?/, 33, 'white', [17, 3.6, 0.2, 0.1, 0, 0, 2, 0, 0.03]),
   F('egg curry', /egg curry|anda curry|egg masala/, 200, 'bowl (2 eggs)', [230, 13, 8, 16, 1.5, 2, 70, 6, 0.9]),
-  F('omelette', /omelet+e?s?|omlet|egg bhurji|anda bhurji/, 110, '2-egg omelette', [190, 12.5, 1.5, 15, 0.2, 1.8, 56, 0, 0.9], { eggs: true }),
+  F('omelette', /omelet+e?s?|omlet|egg bhurji|anda bhurji/, 110, '2-egg omelette', [160, 13, 2, 11, 0.5, 1.8, 56, 0, 0.9], { eggs: true }),
   F('egg', /\beggs?\b|\banda\b|\bande\b/, 50, 'egg', [72, 6.3, 0.4, 4.8, 0, 0.9, 28, 0, 0.45]),
-  F('paneer bhurji', /paneer bhurji/, 150, 'bowl', [290, 15, 8, 22, 1.5, 1, 250, 10, 0.5]),
+  F('paneer bhurji', /paneer bhurji/, 60, 'small scoop (60 g)', [150, 10, 3, 11, 1, 0.4, 100, 4, 0.2]),
+  F('mix veg paneer paratha', /mix ?veg paneer paratha/, 100, 'paratha', [270, 9, 31, 11, 3.5, 1.6, 160, 1, 0.2]),
   F('paneer paratha', /paneer paratha/, 100, 'paratha', [290, 10, 32, 14, 3, 1.6, 160, 1, 0.2]),
-  F('paneer curry', /palak paneer|paneer (butter )?masala|shahi paneer|matar paneer|kadai paneer|paneer curry|paneer sabji|paneer tikka/, 150, 'bowl', [280, 11, 10, 22, 2, 1.5, 220, 10, 0.4]),
+  F('kadai paneer', /kadai paneer/, 150, 'bowl', [240, 11, 9, 17, 2.5, 1.5, 210, 9, 0.4]),
+  F('paneer curry', /palak paneer|paneer (butter )?masala|shahi paneer|matar paneer|paneer curry|paneer sabji|paneer tikka|paneer mutter/, 150, 'bowl', [220, 10.5, 12, 14, 3, 1.5, 220, 10, 0.4]),
   F('paneer', /paneer/, 100, '100 g', [265, 18.3, 1.2, 20.8, 0, 0.2, 208, 0, 0.8]),
   F('tofu', /tofu/, 100, '100 g', [120, 12, 2, 7, 1, 2.5, 200, 0, 0]),
   F('veg biryani / pulao', /veg biryani|pulao|pulav/, 250, 'plate', [400, 7, 62, 13, 4, 1.5, 50, 5, 0]),
   F('chicken biryani', /chicken biryani|mutton biryani|biryani/, 300, 'plate', [550, 22, 65, 22, 2, 2, 60, 3, 0.4]),
-  F('chicken curry', /chicken curry|butter chicken|chicken masala|chicken gravy|chicken tikka/, 200, 'bowl', [300, 22, 8, 20, 2, 1.5, 40, 6, 0.4]),
+  F('chicken curry', /chicken curry|butter chicken|chicken masala|chicken gravy|chicken tikka|chicken hyderabadi|chicken do pyaza/, 200, 'bowl (3-4 pieces)', [350, 31, 10, 20, 1.5, 1.5, 40, 6, 0.4]),
   F('chicken', /chicken/, 100, '100 g cooked', [180, 27, 0, 7.5, 0, 1, 15, 0, 0.3]),
   F('fish curry', /fish curry/, 200, 'bowl', [220, 18, 6, 14, 1, 1.2, 60, 4, 2]),
   F('fish', /fish|prawns?|surmai|pomfret|bangda|rawas/, 100, '100 g cooked', [140, 22, 0, 5.5, 0, 0.8, 40, 0, 2.5]),
   F('mutton', /mutton|keema|\bmeat\b/, 100, '100 g cooked', [250, 25, 0, 16, 0, 2.7, 15, 0, 2.6]),
-  F('misal pav', /misal(?: ?pav)?/, 330, 'plate with 2 pav', [500, 17, 62, 20, 9, 4, 80, 8, 0]),
+  F('misal pav', /miss?al(?: ?pav)?/, 330, 'plate with 2 pav', [380, 13, 52, 13, 7, 4, 80, 8, 0]),
   F('pav bhaji', /pav bhaji/, 300, 'plate with 2 pav', [450, 10, 60, 19, 7, 2.5, 70, 25, 0.1]),
   F('vada pav', /vada ?pav/, 150, 'piece', [290, 6, 40, 11, 3, 1.5, 40, 6, 0]),
-  F('rajma', /rajma|kidney beans?/, 150, 'bowl', [190, 9, 25, 5, 7, 2.4, 45, 3, 0]),
+  F('chole bhature', /ch?ole bhature|bhatura/, 300, 'plate (2 bhature + chole)', [520, 12, 65, 23, 8, 3, 70, 5, 0]),
+  F('rajma', /rajma|kidney beans?/, 150, 'bowl', [180, 9, 26, 5, 7, 2.4, 45, 3, 0]),
   F('roasted chana', /roasted chana|bhuna chana|chana jor|futana/, 30, 'handful', [110, 6, 17, 1.5, 5, 1.8, 17, 0, 0]),
-  F('chole', /chole|chhole|chana masala|chickpeas?|kabuli|\bchana\b/, 150, 'bowl', [210, 9, 27, 7, 7, 2.4, 60, 3, 0]),
+  F('chole', /chole|chhole|chana masala|chickpeas?|kabuli|\bchana\b/, 150, 'bowl', [180, 9, 26, 5, 7, 2.4, 60, 3, 0]),
   F('sprouts', /sprouts?|usal|moong salad/, 100, 'bowl', [100, 7, 15, 0.6, 4, 1.5, 30, 10, 0]),
   F('sambar', /sambar|sambhar/, 150, 'bowl', [110, 4.5, 15, 3.5, 4, 1.2, 40, 6, 0]),
   F('khichdi', /khichdi|khichadi|pongal/, 200, 'bowl', [240, 7.5, 38, 6, 4, 1.5, 30, 1, 0]),
-  F('dal', /\bdal\b|\bdaal\b|\bdhal\b|lentils?|varan|amti|\btoor\b|masoor/, 150, 'bowl', [150, 7, 19, 4.5, 4, 1.5, 30, 2, 0]),
+  F('veg kadai', /veg kadai|kadai veg/, 150, 'bowl', [140, 3.5, 12, 8.5, 4, 1.3, 45, 15, 0]),
+  F('dal', /\bdal\b|\bdaal\b|\bdhal\b|lentils?|varan|amti|\btoor\b|masoor/, 150, 'bowl', [150, 7.5, 18, 5, 5, 1.5, 30, 2, 0]),
   F('sol kadhi', /sol ?kadhi|kokum (?:curry|kadhi)/, 150, 'glass', [110, 1, 5, 10, 0.5, 0.5, 15, 1, 0]),
-  F('kadhi', /kadhi/, 150, 'bowl', [130, 4, 10, 8, 1, 0.5, 110, 1, 0.3]),
+  F('kadhi', /kadh?i(?: pakoda)?/, 150, 'bowl', [170, 5, 16, 9, 1.5, 0.5, 110, 1, 0.3]),
   F('greek yogurt', /greek yog/, 100, '100 g', [80, 10, 4, 2.5, 0, 0.1, 110, 0, 0.7]),
-  F('curd', /curd|dahi|yogh?urt|raita/, 150, 'bowl', [92, 5, 7, 5, 0, 0.1, 180, 1, 0.5]),
+  F('curd', /curd|dahi|yogh?urt|raita/, 100, 'small bowl (100 g)', [60, 3.5, 4.5, 3, 0, 0.1, 120, 0.7, 0.3]),
   F('lassi', /lassi/, 250, 'glass', [200, 6, 30, 6, 0, 0.1, 220, 1, 0.6]),
-  F('buttermilk', /chaas|chhaas|buttermilk|mattha|taak/, 250, 'glass', [40, 2, 3, 2, 0, 0.1, 75, 1, 0.2]),
+  F('buttermilk', /chaas|chhaas|buttermilk|mattha|taak/, 200, 'glass (200 ml)', [40, 2.5, 4, 1.5, 0, 0.1, 60, 0.8, 0.2]),
   F('chai', /\bchai\b|\btea\b/, 120, 'cup (milk, sugar)', [70, 1.5, 11, 2.2, 0, 0.1, 55, 0, 0.2], { drink: true }),
   F('coffee', /coffee/, 150, 'cup (milk, sugar)', [90, 3, 11, 3.5, 0, 0.1, 100, 0, 0.3], { drink: true }),
   F('fruit juice', /(?:orange |mosambi |apple |mango |pineapple |fresh |fruit )?juice/, 250, 'glass', [112, 1.7, 26, 0.5, 0.5, 0.5, 25, 60, 0], { drink: true }),
@@ -70,37 +75,45 @@ export const FOODS = [
   F('peanuts', /peanuts?|groundnuts?|shengdana|moongphali/, 30, 'handful', [170, 7.5, 5, 14, 2.5, 1.4, 28, 0, 0]),
   F('makhana', /makhana|fox ?nuts?|lotus seeds?/, 25, 'bowl (roasted)', [90, 2.4, 19, 0.4, 3.6, 0.4, 15, 0, 0]),
   F('nuts', /almonds?|badam|cashews?|kaju|walnuts?|pista|\bnuts\b|dry ?fruits?/, 25, 'handful', [145, 5, 5, 12.5, 3, 0.9, 65, 0, 0]),
+  F('moong chilla', /moong (?:daal|dal)? ?chilla/, 160, '2 pieces', [210, 12, 26, 6, 5, 2, 30, 2, 0]),
   F('besan chilla', /chilla|cheela|pudla/, 80, 'chilla', [150, 7, 15, 6, 3, 1.5, 25, 4, 0]),
-  F('paratha', /aloo paratha|paratha|parotta|thepla/, 100, 'paratha', [260, 5.5, 36, 11, 3, 1.5, 25, 5, 0]),
-  F('roti', /\broti|chapati|chapatti|chapathi|phulka|bhakri|bhakari|\bpoli\b/, 40, 'roti', [105, 3.5, 21, 0.5, 3, 1.2, 13, 0, 0]),
+  F('aloo paratha', /aloo paratha/, 100, 'paratha (with dahi & chutney)', [240, 5, 34, 9, 3, 1.5, 25, 5, 0]),
+  F('paratha', /paratha|parotta|thepla/, 100, 'paratha', [260, 5.5, 36, 11, 3, 1.5, 25, 5, 0]),
+  F('roti', /\broti|chapati|chapatti|chapathi|phulka|bhakri|bhakari|\bpoli\b/, 22.5, 'roti', [78, 2.4, 15.8, 0.4, 2.4, 0.7, 7, 0, 0]),
+  F('puri bhaji', /puri bhaji|poori bhaji/, 300, 'plate (4 puris + sabzi)', [380, 7, 52, 16, 4, 2, 40, 10, 0]),
+  F('bhel puri', /bhel puri|pani puri|sev puri/, 200, 'plate', [210, 4, 35, 6, 3, 1.5, 30, 8, 0]),
   F('puri', /\bpuris?\b|poori/, 25, 'puri', [100, 2, 11, 5.5, 1, 0.6, 8, 0, 0]),
   F('naan', /naan|kulcha/, 90, 'naan', [260, 8, 45, 5, 2, 2.9, 60, 0, 0.1]),
-  F('rice', /\brice\b|chawal|jeera rice|curd rice|lemon rice/, 150, 'bowl (cooked)', [195, 4, 42, 0.5, 0.6, 0.3, 15, 0, 0]),
-  F('poha', /poha/, 200, 'plate', [300, 5, 50, 8.5, 3, 2.7, 20, 8, 0]),
+  F('rice', /\brice\b|chawal|jeera rice|curd rice|lemon rice/, 150, 'bowl (cooked)', [195, 4, 43, 0.5, 1, 0.3, 15, 0, 0]),
+  F('indori poha', /indori poha/, 150, 'plate', [220, 4.5, 36, 6.5, 2, 2, 15, 6, 0]),
+  F('poha', /poha/, 150, 'plate', [220, 4.5, 36, 6.5, 2, 2, 15, 6, 0]),
   F('upma', /upma|sheera|rava/, 200, 'plate', [300, 6, 42, 11, 3, 1.5, 30, 3, 0]),
-  F('masala dosa', /masala dosa/, 180, 'dosa', [350, 7, 50, 13, 4, 1.5, 40, 8, 0]),
-  F('dosa', /dosa|uttapam|uthappam/, 120, 'dosa', [170, 4, 28, 5, 1.5, 0.8, 20, 0, 0]),
+  F('masala dosa', /masala dosa/, 180, 'dosa (+ sambar/chutney)', [310, 6.5, 48, 10, 3.5, 1.5, 40, 8, 0]),
+  F('uttapam', /uttapam|uthappam/, 180, '2 pieces', [170, 3, 30, 4, 1, 1, 30, 0, 0]),
+  F('dosa', /dosa/, 120, 'dosa', [170, 4, 28, 5, 1.5, 0.8, 20, 0, 0]),
   F('idli', /idli|idly/, 40, 'idli', [58, 2, 12, 0.2, 0.6, 0.4, 8, 0, 0]),
   F('medu vada', /medu vada|\bvada\b|\bwada\b/, 45, 'vada', [135, 4, 12, 8, 2, 0.9, 30, 0, 0]),
-  F('dhokla', /dhokla|khaman/, 40, 'piece', [65, 2.5, 9, 2, 1, 0.6, 15, 0, 0]),
+  F('dhokla', /dhokla|khaman/, 40, 'piece', [53, 1.8, 8, 1.5, 0.7, 0.6, 15, 0, 0]),
   F('oats', /oats|oatmeal|porridge|daliya|dalia/, 40, 'bowl (40 g dry)', [150, 5, 27, 2.8, 4, 1.7, 20, 0, 0]),
   F('cereal', /cornflakes|muesli|cereal|granola/, 40, 'bowl (no milk)', [150, 3, 34, 0.4, 1, 3, 5, 0, 0]),
   F('sandwich', /sandwich/, 150, 'sandwich', [300, 8, 40, 11.5, 4, 2, 80, 10, 0.1]),
   F('burger', /burger/, 180, 'burger', [450, 14, 50, 21, 3, 2.5, 100, 4, 0.5]),
   F('pizza', /pizza/, 100, 'slice', [270, 11, 33, 10, 2, 2.5, 190, 1, 0.4]),
+  F('cheese maggi', /cheese maggi/, 250, 'plate', [380, 9, 48, 17, 2, 2, 120, 0, 0.3]),
   F('noodles', /maggi|noodles|ramen|chowmein|hakka/, 70, 'pack', [310, 6.5, 44, 12, 2, 2.5, 20, 0, 0]),
+  F('white sauce pasta', /white sauce pasta/, 200, 'plate', [340, 9, 42, 15, 2.5, 1.8, 60, 10, 0.1]),
   F('pasta', /pasta|macaroni|spaghetti/, 200, 'plate', [330, 9, 55, 8, 4, 1.8, 60, 10, 0.1]),
   F('momos', /momos?/, 180, 'plate (6)', [300, 9, 48, 7, 3, 1.5, 40, 5, 0]),
-  F('samosa', /samosa|kachori/, 60, 'piece', [160, 3, 18, 8.5, 1.5, 0.8, 15, 3, 0]),
+  F('samosa', /samosa|kachori/, 60, 'piece (with chutney)', [250, 4, 28, 13, 2.5, 0.8, 15, 3, 0]),
   F('papad', /papads?|papadums?|poppadoms?|papadam/, 10, 'papad', [37, 2.5, 6, 0.3, 1.8, 0.8, 8, 0, 0]),
   F('pav', /\bpav\b|\bbun\b/, 40, 'pav', [110, 3.5, 20, 1.5, 1, 1, 30, 0, 0]),
   F('bread', /bread|toast/, 30, 'slice', [80, 2.7, 15, 1, 0.8, 1, 30, 0, 0]),
-  F('sabji', /sabji|sabzi|subji|\bbhaji\b|bhindi|\baloo\b|potato|gobi|cauliflower|cabbage|vegetables?|veg curry|\bpalak\b|spinach|baingan|brinjal|mix veg|methi|lauki|dudhi|tondli|karela|capsicum|beans/, 150, 'bowl', [120, 3, 14, 6.5, 4, 1.2, 50, 20, 0]),
-  F('salad', /salad|cucumber|kakdi|carrot|tomato/, 150, 'bowl', [25, 1.5, 5, 0.2, 2, 0.5, 30, 12, 0]),
+  F('sabji', /sabji|sabzi|subji|\bbhaji\b|bhindi|\baloo\b|potato|gobi|cauliflower|cabbage|vegetables?|veg curry|\bpalak\b|spinach|baingan|brinjal|mix veg|methi|lauki|dudhi|tondli|karela|capsicum|beans/, 150, 'bowl', [125, 3, 15, 6, 4, 1.2, 50, 20, 0]),
+  F('salad', /salad|cucumber|kakdi|carrot|tomato/, 50, 'small plate (50 g)', [15, 0.5, 3.5, 0.2, 1.2, 0.2, 10, 4, 0]),
   F('banana', /banana|kela/, 120, 'banana', [105, 1.3, 27, 0.4, 3, 0.3, 6, 10, 0]),
   F('orange / guava', /orange|guava|\bamla\b|kiwi|mosambi|sweet lime|papaya|strawberr/, 150, 'piece', [70, 1.5, 16, 0.5, 4, 0.3, 40, 80, 0]),
   F('fruit', /apple|mango|fruits?|grapes|watermelon|chikoo|chiku|pomegranate|anar|pear|pineapple|melon/, 150, 'piece', [80, 0.8, 20, 0.3, 3, 0.3, 12, 10, 0]),
-  F('sweet', /gulab jamun|jalebi|ladoo|laddu|halwa|kheer|sweets?|mithai|chocolate|ice ?cream|biscuits?|cookies?|cake|chikki/, 50, 'piece', [200, 2.5, 28, 9, 0.3, 0.4, 40, 0, 0.1]),
+  F('sweet', /gulab jamun|jalebi|ladoo|laddu|halwa|kheer|sweets?|mithai|chocolate|ice ?cream|biscuits?|cookies?|cake|chikki/, 50, 'portion', [250, 3.5, 42, 8, 0.5, 0.4, 40, 0, 0.1]),
   F('snack', /chips|namkeen|farsan|bhujia|chivda|chakli|\bsev\b/, 30, 'handful', [160, 3, 15, 10, 1.5, 0.8, 15, 0, 0])
 ];
 
@@ -206,6 +219,24 @@ export function actNutrients(a) {
   return { ...zeroN(), p: Number(a.protein) || 0 };
 }
 
+// Feedback correction: a word near the food changes its numbers instead of us guessing blind.
+// "extra oily" / "dry" shift fat ±30%; a roti/chapati called "thick" scales up from 22.5 g to 30 g atta.
+const OILY_RE = /\bextra oily\b|\btoo oily\b|\bvery oily\b|\boily\b|\bzyada tel\b|\bzyada oil\b/;
+const DRY_RE = /\b(less oily|kam tel|not oily)\b|(?<!not )\bdry\b(?! ?fruit)/;
+const THICK_ROTI_RE = /\b(thick|thicker|moti|mota|bada|badi)\b/;
+const isRoti = food => food.name === 'roti';
+function applyFeedback(food, item, ctx) {
+  if (OILY_RE.test(ctx)) { item.n.f = r2(item.n.f * 1.3); item.desc += ' (extra oily)'; }
+  else if (DRY_RE.test(ctx)) { item.n.f = r2(item.n.f * 0.7); item.desc += ' (less oily)'; }
+  if (isRoti(food) && THICK_ROTI_RE.test(ctx)) {
+    const ratio = 30 / 22.5; // thicker roti ≈ more atta per piece
+    for (const k of NKEYS) item.n[k] = k === 'kcal' ? Math.round(item.n[k] * ratio) : r2(item.n[k] * ratio);
+    item.desc += ' (thick)';
+  }
+  item.protein = r1(item.n.p);
+  return item;
+}
+
 // Find every known food in one piece of text, with its own quantity and size.
 function matchFoods(part) {
   const lc = part.toLowerCase();
@@ -254,21 +285,22 @@ function matchFoods(part) {
     for (const [re, k, label] of SIZE) if (re.test(before)) { size = k; sizeLabel = label; if (label === 'half' && q && q[1] === 'half') qty = 1; }
     const grams = (before.match(/(\d+(?:\.\d+)?)\s*(g|gm|grams?)\b/) || after.match(/^\s*(\d+(?:\.\d+)?)\s*(g|gm|grams?)\b/));
     const ml = (before.match(/(\d+(?:\.\d+)?)\s*ml\b/) || after.match(/^\s*(\d+(?:\.\d+)?)\s*ml\b/));
+    const ctx = before + h.text + after;
     if (h.f.eggs) {
-      const eggs = (before + h.text + after).match(/(\d+)\s*(?:eggs?|anda|ande)/);
-      if (eggs) return makeItem(h.f, +eggs[1] / 2, `${eggs[1]}-egg ${h.f.name}`);
-      return makeItem(h.f, qty);
+      const eggs = ctx.match(/(\d+)\s*(?:eggs?|anda|ande)/);
+      if (eggs) return applyFeedback(h.f, makeItem(h.f, +eggs[1] / 2, `${eggs[1]}-egg ${h.f.name}`), ctx);
+      return applyFeedback(h.f, makeItem(h.f, qty), ctx);
     }
-    if (grams) { const gr = parseFloat(grams[1]); return makeItem(h.f, gr / h.f.g, `${gr} g`); }
-    if (ml) { const v = parseFloat(ml[1]); return makeItem(h.f, v / h.f.g, `${v} ml`); }
+    if (grams) { const gr = parseFloat(grams[1]); return applyFeedback(h.f, makeItem(h.f, gr / h.f.g, `${gr} g`), ctx); }
+    if (ml) { const v = parseFloat(ml[1]); return applyFeedback(h.f, makeItem(h.f, v / h.f.g, `${v} ml`), ctx); }
     const servings = qty * size;
-    return makeItem(h.f, servings, `${sizeLabel ? sizeLabel + ' ' : ''}${qty !== 1 ? fmtQty(qty) + ' × ' : ''}${h.f.unit}`);
+    return applyFeedback(h.f, makeItem(h.f, servings, `${sizeLabel ? sizeLabel + ' ' : ''}${qty !== 1 ? fmtQty(qty) + ' × ' : ''}${h.f.unit}`), ctx);
   });
 }
 
 // Parse one food phrase ("2 roti + 1 bowl rajma and 5 papads") into items.
 export function parseFood(chunk) {
-  const parts = chunk.split(/\+|&|\band\b|\bwith\b(?![^+]*\b(?:milk|sugar)\b)/i).filter(p => p && p.trim());
+  const parts = chunk.split(/\+|&|\band\b|\bwith\b(?![^+]*\b(?:milk|sugar|sambar|sambhar|chutney)\b)/i).filter(p => p && p.trim());
   const items = [];
   let knownCount = 0;
   for (const raw of parts) {
