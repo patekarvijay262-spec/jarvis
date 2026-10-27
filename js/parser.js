@@ -67,8 +67,20 @@ export function parseLocal(text) {
     const rule = RULES.find(r => r.re.test(lc));
     const minutes = minutesIn(chunk);
     if (!rule) {
-      if (food) out.push({ type: 'food', label: chunk, protein: food.protein, n: food.n, items: food.items });
-      else out.push({ type: 'other', label: chunk, minutes });
+      if (food) { out.push({ type: 'food', label: chunk, protein: food.protein, n: food.n, items: food.items }); continue; }
+      // Doesn't match our food table (often a typo, e.g. "channa" for "chana") or any activity.
+      // If it sits right after a food item in the same line, it's almost certainly still food —
+      // keep it attached and visible as "not in food table" instead of silently dropping it as "Other".
+      const prev = out[out.length - 1];
+      if (prev && prev.type === 'food') {
+        const item = { name: chunk, desc: 'not in food table', qty: 1, n: zeroN(), protein: 0, known: false };
+        prev.label += ', ' + chunk;
+        prev.items = [...(prev.items || []), item];
+        prev.n = prev.items.reduce((sum, it) => addN(sum, it.n), zeroN());
+        prev.protein = Math.round(prev.n.p * 10) / 10;
+        continue;
+      }
+      out.push({ type: 'other', label: chunk, minutes });
       continue;
     }
     const a = { type: rule.type, label: chunk };

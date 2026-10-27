@@ -629,7 +629,11 @@ const clean = acts => acts.map(a => Object.fromEntries(Object.entries(a).filter(
 async function refineLogEntry(key, id, text) {
   let acts;
   try { acts = await G.parseWithGemini(S, text); }
-  catch (e) { console.warn(e); return; }
+  catch (e) {
+    console.warn(e);
+    toast(`${G.providerName(S)} couldn't read that entry (${e.message.slice(0, 60)}). Kept the offline read — tap it to fix by hand.`, 5000);
+    return;
+  }
   if (!acts || !acts.length) return;
   const entry = getDay(key).entries.find(e => e.id === id);
   if (!entry) return; // deleted or edited while we were waiting

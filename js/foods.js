@@ -111,6 +111,47 @@ const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six
 const SIZE = [[/\b(small|chhota|chota|little|thoda)\b/, 0.7, 'small'], [/\b(large|big|bada|heavy|full plate)\b/, 1.4, 'large'], [/\bhalf\b/, 0.5, 'half'], [/\bdouble\b/, 2, 'double']];
 const MEAL_WORDS = /\b(ate|eat|eaten|had|lunch|dinner|breakfast|snacks?|meal|nashta|mess|canteen|tiffin)\b/;
 const FILLER = /\b(\d+(\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|half|small|large|big|medium|bowls?|katoris?|plates?|glass(es)?|cups?|pieces?|pcs|slices?|g|gm|grams?|kg|ml|of|with|some|little|and|for|in|at|my|the|ate|had|eat|lunch|dinner|breakfast|snacks?|roasted|roated|fried|boiled|cooked|homemade|home|made|plain|hot|cold|today|morning|evening|night|mess|canteen|then)\b/g;
+const FILLER_WORD = new RegExp(FILLER.source); // non-global: safe for repeated .test() on single words
+
+// Typo-tolerant fallback: a flat list of single-word food names/aliases pulled out of each
+// food's regex, used to catch misspellings ("channa" for "chana", "panner" for "paneer")
+// that the exact regex above would otherwise miss entirely.
+const FOOD_WORDS = (() => {
+  const seen = new Set(), list = [];
+  for (const f of FOODS) {
+    for (const raw of f.re.source.split('|')) {
+      const w = raw.replace(/\\b/g, '').replace(/[()?]/g, '');
+      if (!/^[a-z]+$/i.test(w) || w.length < 4) continue;
+      const key = w + '|' + f.name;
+      if (seen.has(key)) continue;
+      seen.add(key); list.push({ word: w.toLowerCase(), food: f });
+    }
+  }
+  return list;
+})();
+function levenshtein(a, b) {
+  const m = a.length, n = b.length, dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+  return dp[m][n];
+}
+// Best food match for a single word within a typo-tolerant distance (stricter for short words,
+// since two genuinely different short dish names are often only 1-2 edits apart — e.g. "bhurji"
+// vs "bhaji"). Rejects ambiguous ties between two different foods rather than guessing.
+function fuzzyWord(word) {
+  const maxD = word.length <= 6 ? 1 : word.length <= 9 ? 2 : 3;
+  let best = null, bestD = Infinity, ambiguous = false;
+  for (const { word: w, food } of FOOD_WORDS) {
+    if (Math.abs(w.length - word.length) > maxD) continue;
+    const d = levenshtein(word, w);
+    if (d > maxD) continue;
+    if (d < bestD) { bestD = d; best = food; ambiguous = false; }
+    else if (d === bestD && food !== best) { ambiguous = true; }
+  }
+  return ambiguous ? null : best;
+}
 
 const numOf = s => { if (s == null) return null; const t = s.toLowerCase(); if (NUM_WORDS[t] != null) return NUM_WORDS[t]; const n = parseFloat(t); return Number.isFinite(n) ? n : null; };
 export const r1 = x => Math.round(x * 10) / 10;
@@ -162,6 +203,17 @@ function matchFoods(part) {
       for (let i = s; i < e; i++) taken[i] = true;
       hits.push({ f, s, e, text: m[0] });
     }
+  }
+  // Typo-tolerant pass: words left over after exact matching, fuzzy-matched against known food names.
+  const wordRe = /[a-z]+/g;
+  let wm;
+  while ((wm = wordRe.exec(lc))) {
+    const s = wm.index, e = s + wm[0].length, word = wm[0];
+    if (word.length < 4 || taken.slice(s, e).some(Boolean) || FILLER_WORD.test(word)) continue;
+    const f = fuzzyWord(word);
+    if (!f) continue;
+    for (let i = s; i < e; i++) taken[i] = true;
+    hits.push({ f, s, e, text: word });
   }
   hits.sort((a, b) => a.s - b.s);
   // Tea/coffee "with milk" is part of the drink; an omelette or egg curry already counts its eggs.
