@@ -38,6 +38,10 @@ export const GUIDELINES = {
     source: 'Sleep and digital-media studies; social-media and wellbeing meta-analyses',
     text: 'Screens in the hour before bed delay sleep onset (light + arousal). Heavy passive scrolling is associated with lower mood; active, intentional use is far less harmful. A useful target is ≤ 2 h/day of leisure screen time.'
   },
+  nutrition: {
+    source: 'ICMR-NIN Nutrient Requirements for Indians (2020); WHO Healthy Diet fact sheet',
+    text: 'Adult men need about 19 mg iron, 1000 mg calcium, 80 mg vitamin C and 2.5 µg vitamin B12 a day, plus about 15 g fibre per 1000 kcal. Carbohydrates should give roughly 50–55% of calories and fat 20–30%. Vitamin C in the same meal (lemon, amla, guava, tomato) multiplies iron absorption from dal, poha and greens. B12 comes only from animal foods (milk, curd, paneer, eggs, meat), so vegetarians should eat dairy every day.'
+  },
   skills: {
     source: 'Deliberate-practice and second-language acquisition research',
     text: 'Skills grow from short, frequent, focused practice with feedback. Spoken fluency improves mainly through speaking output and shadowing, not passive listening. Chess training improves chess-specific pattern recognition; transfer to general intelligence is weak, so value it for focus and calculation, not IQ.'
@@ -112,6 +116,7 @@ export const DEFAULT_SETTINGS = {
   name: 'Vijay',
   weightKg: 65,
   proteinPerKg: 1.4,
+  calorieTarget: 2400,
   sleepTarget: 8,
   waterTarget: 3,
   exerciseTarget: 30,

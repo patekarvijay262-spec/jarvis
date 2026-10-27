@@ -1,6 +1,6 @@
 // Gemini API (Google AI Studio key). Called directly from the browser.
 import { knowledgePack } from './knowledge.js';
-import { foodReference } from './foods.js';
+import { foodReference, findFood, makeItem, zeroN, addN, r1, NKEYS } from './foods.js';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const FALLBACK_MODEL = 'gemini-2.5-flash';
@@ -71,17 +71,28 @@ const TYPES = 'walk, sunwalk, run, gym, yoga, cycle, swim, sport, food, water, s
 
 export async function parseWithGemini(settings, text) {
   const system = `You convert a person's free-text daily log (Indian context, may mix Hindi/Marathi words) into structured JSON. Never invent foods or activities that are not in the text.
-For protein, use this reference table (home-style Indian portions) so estimates stay consistent; scale by quantity and by size words (small ×0.7, large ×1.4, half ×0.5); grams given → scale by weight:
+Foods: map every food to this reference table by exact name, and give "qty" = number of table servings eaten (scale by count and size words: small ×0.7, large ×1.4, half ×0.5; grams or ml → divide by the serving weight):
 ${foodReference()}
-For a food not in the table, estimate from standard nutrition data (IFCT/USDA) and set "known": false so the app can flag it.`;
+Only if a food truly has no close match, set "match": null and estimate per the whole amount eaten from IFCT 2017 / USDA data: "est": {"kcal","p","c","f","fib","fe","ca","vc","b12"} (g, g, g, g, mg, mg, mg, µg).`;
   const prompt = `Log: """${text}"""
 
 Return {"acts":[...]} where each act is:
-{"type": one of [${TYPES}], "label": short original phrase, "minutes": number|null, "protein": total grams|null (food only), "items": [{"name": food, "desc": "quantity and size, e.g. 2 × roti", "protein": grams, "known": true|false}] (food only, one entry per food), "pages": number|null, "litres": number|null (water), "hours": number|null (sleep), "sun": true if outdoors in daylight, "count": number|null (games/puzzles)}
-Put all foods eaten together in one food act. "protein" must equal the sum of its items. "sun walk"/walk outdoors in daylight → type "sunwalk". Coding, assignments, lab reports, focused work → "deepwork". Classes/lectures/revision → "study". Instagram/reels/YouTube → "screen".`;
+{"type": one of [${TYPES}], "label": short original phrase, "minutes": number|null, "items": [{"name": food as written, "match": table name or null, "qty": servings, "desc": "e.g. 2 roti or small bowl", "est": {...} only when match is null}] (food acts only), "pages": number|null, "litres": number|null (water), "hours": number|null (sleep), "sun": true if outdoors in daylight, "count": number|null (games/puzzles)}
+Put foods eaten together in one food act. "sun walk"/walk outdoors in daylight → "sunwalk". Coding, assignments, lab reports, focused work → "deepwork". Classes/lectures/revision → "study". Instagram/reels/YouTube → "screen".`;
   const out = await generate(settings, system, prompt, 'quick');
   const acts = Array.isArray(out.acts) ? out.acts : [];
-  for (const a of acts) if (a.type === 'food' && Array.isArray(a.items) && a.items.length) a.protein = Math.round(a.items.reduce((s, i) => s + (Number(i.protein) || 0), 0));
+  for (const a of acts) {
+    if (a.type !== 'food' || !Array.isArray(a.items)) continue;
+    a.items = a.items.map(it => {
+      const f = findFood(it.match);
+      const qty = Math.max(0, Number(it.qty) || 1);
+      if (f) return makeItem(f, qty, it.desc || undefined);
+      const n = zeroN(); for (const k of NKEYS) n[k] = Math.max(0, Number(it.est?.[k]) || 0);
+      return { name: it.name || 'food', desc: (it.desc || '') + ' (AI estimate)', qty: 1, n, protein: r1(n.p), known: n.kcal > 0, estimated: true };
+    });
+    a.n = a.items.reduce((s, it) => addN(s, it.n), zeroN());
+    a.protein = r1(a.n.p);
+  }
   return acts;
 }
 

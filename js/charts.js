@@ -73,12 +73,12 @@ export function barsWithTarget(el, labels, data, target, color, suffix = '') {
   }, { scales: axes(p, { suffix }) });
 }
 
-export function stacked(el, labels, series) {
+export function stacked(el, labels, series, suffix = 'm') {
   const p = palette();
   return base('bar', el, {
     labels,
     datasets: series.map(s => ({ label: s.name, data: s.data, backgroundColor: s.color, borderRadius: 4, maxBarThickness: 26 }))
-  }, { scales: axes(p, { suffix: 'm', stacked: true }), plugins: { legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 14 } }, tooltip: { backgroundColor: p.surface, titleColor: p.fg, bodyColor: p.fg, borderColor: p.grid, borderWidth: 1 } } });
+  }, { scales: axes(p, { suffix, stacked: true }), plugins: { legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 14 } }, tooltip: { backgroundColor: p.surface, titleColor: p.fg, bodyColor: p.fg, borderColor: p.grid, borderWidth: 1 } } });
 }
 
 export function radar(el, labels, sets) {

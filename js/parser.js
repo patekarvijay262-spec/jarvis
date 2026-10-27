@@ -1,5 +1,5 @@
 // Local free-text parser. Works offline; Gemini replaces it when a key is set.
-import { parseFood } from './foods.js';
+import { parseFood, addN, zeroN } from './foods.js';
 
 const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, half: 0.5 };
 
@@ -61,13 +61,13 @@ export function parseLocal(text) {
     const food = parseFood(chunk);
     // Food chunks often contain "+": "2 eggs + dal"
     if (food && !/\b(walk|walked|run|ran|gym|read|study|studied|played)\b/.test(lc)) {
-      out.push({ type: 'food', label: chunk, protein: food.protein, items: food.items });
+      out.push({ type: 'food', label: chunk, protein: food.protein, n: food.n, items: food.items });
       continue;
     }
     const rule = RULES.find(r => r.re.test(lc));
     const minutes = minutesIn(chunk);
     if (!rule) {
-      if (food) out.push({ type: 'food', label: chunk, protein: food.protein, items: food.items });
+      if (food) out.push({ type: 'food', label: chunk, protein: food.protein, n: food.n, items: food.items });
       else out.push({ type: 'other', label: chunk, minutes });
       continue;
     }
@@ -105,5 +105,16 @@ export function parseLocal(text) {
     if (/outside|outdoor|sun|park|ground|beach/.test(lc) && ['walk', 'run', 'cycle', 'sport'].includes(rule.type)) a.sun = true;
     out.push(a);
   }
-  return out;
+  // Foods written in one line are one meal: merge them into a single food act.
+  const merged = [];
+  for (const a of out) {
+    const last = merged[merged.length - 1];
+    if (a.type === 'food' && last?.type === 'food') {
+      last.label += ', ' + a.label;
+      last.items = [...(last.items || []), ...(a.items || [])];
+      last.n = last.items.reduce((sum, it) => addN(sum, it.n), zeroN());
+      last.protein = Math.round(last.n.p * 10) / 10;
+    } else merged.push(a);
+  }
+  return merged;
 }

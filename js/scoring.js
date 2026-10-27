@@ -1,5 +1,6 @@
 // Deterministic scoring. Same inputs → same scores, so trends and friend comparisons are fair.
 import { EFFECTS, SKILL_LABELS } from './knowledge.js';
+import { actNutrients, addN, zeroN, dailyTargets } from './foods.js';
 
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 const BODY_TYPES = ['walk', 'sunwalk', 'run', 'gym', 'yoga', 'cycle', 'swim', 'sport', 'exercise'];
@@ -13,7 +14,7 @@ export function totals(day, s) {
     water: q.water || 0, sleep: q.sleep ?? null, deepMin: 0, readingMin: 0, pages: 0,
     skills: { english: 0, chess: 0, upsc: 0, meditation: 0 },
     screen: q.screen ?? null, screenFromLogs: 0, mood: q.mood ?? null, energy: q.energy ?? null,
-    social: false, leisureMin: 0, count: acts.length
+    social: false, leisureMin: 0, count: acts.length, n: zeroN(), meals: 0
   };
   for (const a of acts) {
     const m = Number(a.minutes) || 0;
@@ -23,7 +24,7 @@ export function totals(day, s) {
       if (a.type === 'gym' || a.type === 'yoga') t.strength = t.strength || a.type === 'gym';
       if (a.sun || a.type === 'sunwalk') t.sunMin += m || 10;
     }
-    if (a.protein) t.protein += Number(a.protein) || 0;
+    if (a.type === 'food') { t.n = addN(t.n, actNutrients(a)); t.meals++; }
     if (a.type === 'water') t.water += Number(a.litres) || 0;
     if (a.type === 'sleep' && a.hours && t.sleep == null) t.sleep = a.hours;
     if (a.type === 'deepwork' || a.type === 'study') t.deepMin += m;
@@ -35,9 +36,21 @@ export function totals(day, s) {
     if (a.type === 'sport' && /friend|team|with/.test(a.label || '')) t.social = true;
   }
   if (t.screen == null && t.screenFromLogs) t.screen = +(t.screenFromLogs / 60).toFixed(1);
-  t.proteinTarget = Math.round(s.weightKg * s.proteinPerKg);
+  t.protein = Math.round(t.n.p * 10) / 10;
+  t.targets = dailyTargets(s);
+  t.proteinTarget = t.targets.p;
   t.water = +t.water.toFixed(2);
   return t;
+}
+
+// Diet quality: calories near target, plus fibre and four key micronutrients toward their daily need.
+export function nutritionScore(t) {
+  if (!t.meals) return 0;
+  const T = t.targets, n = t.n;
+  const ratio = n.kcal / T.kcal;
+  const cal = ratio <= 0 ? 0 : ratio < 0.85 ? ratio / 0.85 : ratio <= 1.15 ? 1 : clamp(1 - (ratio - 1.15) * 2);
+  const parts = ['fib', 'fe', 'ca', 'vc', 'b12'].map(k => clamp(n[k] / T[k]));
+  return (cal + parts.reduce((a, b) => a + b, 0)) / 6;
 }
 
 function sleepScore(h, target) {
@@ -51,9 +64,10 @@ export function score(day, s) {
   const t = totals(day, s);
   const ex = clamp(t.activeMin / s.exerciseTarget) * 0.9 + (t.strength ? 0.1 : 0);
   const prot = clamp(t.protein / t.proteinTarget);
+  const nut = nutritionScore(t);
   const sl = sleepScore(t.sleep, s.sleepTarget);
   const wa = clamp(t.water / s.waterTarget);
-  const body = 0.35 * ex + 0.30 * prot + 0.25 * sl + 0.10 * wa;
+  const body = 0.30 * ex + 0.20 * prot + 0.15 * nut + 0.25 * sl + 0.10 * wa;
 
   const deep = clamp(t.deepMin / s.deepWorkTarget);
   const read = clamp(t.readingMin / s.readingTarget);
@@ -69,7 +83,7 @@ export function score(day, s) {
   const mind = 0.35 * me + 0.25 * med + 0.15 * sun + 0.10 * (t.social ? 1 : 0) + 0.15 * scr;
 
   const parts = {
-    body: { exercise: ex, protein: prot, sleep: sl, water: wa },
+    body: { exercise: ex, protein: prot, nutrition: nut, sleep: sl, water: wa },
     brain: { deepwork: deep, reading: read, skills: sk, sleep: sl },
     mind: { moodEnergy: me, meditation: med, sunlight: sun, social: t.social ? 1 : 0, screen: scr }
   };
@@ -121,6 +135,15 @@ export function localSuggestions(sc, s, slots = []) {
   for (const k of ['english', 'chess', 'upsc']) if (s.skills.includes(k) && !t.skills[k]) ideas.push({ w: 0.45, title: skillIdea(k), why: 'Short daily practice beats long occasional sessions.', mins: k === 'upsc' ? 30 : 15 });
   if (s.skills.includes('meditation') && sc.parts.mind.meditation < 1) ideas.push({ w: 0.5, title: `${s.meditationTarget} min meditation right after waking`, why: 'Daily mindfulness modestly lowers stress and trains attention.', mins: s.meditationTarget });
   if (t.screen != null && t.screen > s.screenLimit) ideas.push({ w: 0.7, title: `Cap leisure screens at ${s.screenLimit} h; app timer on reels/YouTube`, why: `You logged ${t.screen} h. Passive scrolling is linked with lower mood.`, mins: 0 });
+  if (t.meals) {
+    const T = t.targets, n = t.n, pct = k => n[k] / T[k];
+    if (pct('fib') < 0.6) ideas.push({ w: 0.55, title: 'Add a bowl of sprouts, salad or a fruit with lunch and dinner', why: `Fibre was ${Math.round(n.fib)} g of ${T.fib} g. Fibre steadies blood sugar and keeps digestion regular.`, mins: 0 });
+    if (pct('fe') < 0.6) ideas.push({ w: 0.5, title: 'Squeeze lemon on dal, poha or sabji; add chana, rajma or greens', why: `Iron was ${n.fe.toFixed(1)} mg of ${T.fe} mg. Vitamin C in the same meal greatly raises iron absorption.`, mins: 0 });
+    if (pct('ca') < 0.6) ideas.push({ w: 0.5, title: 'Have curd, a glass of milk or paneer once more', why: `Calcium was ${Math.round(n.ca)} mg of ${T.ca} mg. Dairy is the easiest Indian source.`, mins: 0 });
+    if (pct('b12') < 0.6) ideas.push({ w: 0.5, title: 'Include milk, curd, paneer or eggs every day', why: `B12 was ${n.b12.toFixed(1)} µg of ${T.b12} µg. B12 comes only from animal foods and low levels cause fatigue.`, mins: 0 });
+    if (pct('vc') < 0.6) ideas.push({ w: 0.4, title: 'Eat one guava, orange or amla', why: `Vitamin C was ${Math.round(n.vc)} mg of ${T.vc} mg. One guava covers the whole day.`, mins: 0 });
+    if (pct('kcal') > 1.2) ideas.push({ w: 0.5, title: 'Swap one fried snack or sweet for fruit or roasted chana', why: `You ate about ${n.kcal} kcal against ${T.kcal}. Small swaps fix a surplus without hunger.`, mins: 0 });
+  }
   if (t.water < s.waterTarget * 0.8) ideas.push({ w: 0.4, title: `Carry a 1 L bottle; finish it twice before 6 pm`, why: 'Mild dehydration lowers focus and mood, especially in Mumbai heat.', mins: 0 });
   ideas.sort((a, b) => b.w - a.w);
   let si = 0;

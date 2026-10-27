@@ -1,5 +1,6 @@
 import { state, save, getDay, touch, mergeDays, dateKey, shiftKey, exportJSON, importJSON, uid } from './store.js';
 import { parseLocal } from './parser.js';
+import { NUTRIENTS, FOODS, findFood, makeItem, scaleN, itemNutrients, zeroN, addN, fmtQty, r1 as round1, dailyTargets } from './foods.js';
 import { score, grade, achievements, localSuggestions, streak, skillName } from './scoring.js';
 import { GUIDELINES, SKILL_LABELS, DEFAULT_SETTINGS } from './knowledge.js';
 import * as G from './gemini.js';
@@ -181,8 +182,8 @@ function greeting() {
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
 }
 
-const COMP_LABEL = { exercise: 'Exercise', protein: 'Protein', sleep: 'Sleep', water: 'Water', deepwork: 'Deep work', reading: 'Reading', skills: 'Skills practice', moodEnergy: 'Mood and energy', meditation: 'Meditation', sunlight: 'Sunlight', social: 'Time with people', screen: 'Screen limit' };
-const GAUGE_HINT = { body: 'Exercise, protein, sleep and water', brain: 'Deep work, reading and skills', mind: 'Mood, meditation, sunlight and screens' };
+const COMP_LABEL = { exercise: 'Exercise', protein: 'Protein', nutrition: 'Diet quality', sleep: 'Sleep', water: 'Water', deepwork: 'Deep work', reading: 'Reading', skills: 'Skills practice', moodEnergy: 'Mood and energy', meditation: 'Meditation', sunlight: 'Sunlight', social: 'Time with people', screen: 'Screen limit' };
+const GAUGE_HINT = { body: 'Exercise, food, sleep and water', brain: 'Deep work, reading and skills', mind: 'Mood, meditation, sunlight and screens' };
 let firstPaint = true;
 function verdict(n, count) {
   if (!count && !n) return 'Nothing logged yet';
@@ -225,14 +226,15 @@ function viewToday(v) {
   const week = lastKeys(7, key);
   const logStreak = streak(state.days, d => (d.entries || []).length > 0, today());
   const isToday = key === today();
+  const brainSkills = ['english', 'chess', 'upsc'].filter(k => S.skills.includes(k));
 
   const targets = [
-    ['Protein', t.protein, t.proteinTarget, 'g', 'body'],
     ['Exercise', t.activeMin, S.exerciseTarget, 'min', 'body'],
     ['Sleep', t.sleep ?? 0, S.sleepTarget, 'h', 'body'],
     ['Water', t.water, S.waterTarget, 'L', 'body'],
     ['Deep work', t.deepMin, S.deepWorkTarget, 'min', 'brain'],
     ['Reading', t.readingMin, S.readingTarget, 'min', 'brain'],
+    ['Skills', brainSkills.filter(k => t.skills[k] > 0).length, brainSkills.length, '', 'brain'],
     ['Meditation', t.skills.meditation, S.meditationTarget, 'min', 'mind'],
     ['Sunlight', t.sunMin, 15, 'min', 'mind']
   ];
@@ -260,11 +262,16 @@ function viewToday(v) {
         </div>`;
       }).join('')}
     </div>
+    <div class="week">
+      <div class="week-h"><b>Last 7 days</b><span class="ribbon-legend">${PILLARS.map(([p, n]) => `<span style="--c:var(--${p})">${n}</span>`).join('')}</span></div>
+      <div class="chart-box week-box"><canvas id="chWeek" aria-label="Body, Brain and Mind scores for the last 7 days" role="img"></canvas></div>
+    </div>
     <div class="ribbon-wrap">${ribbon(day, key)}</div>
   </section>
 
   <div class="grid">
-    <section class="card composer c-7">
+    <div class="c-7 col">
+    <section class="card composer">
       <div class="card-h"><h2>What did you do?</h2><span class="sub">${G.provider(S) ? `${G.providerName(S)} reads your words` : 'Write it the way you’d say it'}</span></div>
       <textarea class="input" id="logText" placeholder="10 min sun walk, 2 eggs + dal, read 20 pages, 90 min deep work on lab report"></textarea>
       <div class="bar">
@@ -274,22 +281,11 @@ function viewToday(v) {
         <button class="btn primary" id="logBtn">${I.send} Log it</button>
       </div>
       <div class="examples">
-        ${['20 min sun walk', '3 eggs + 2 roti + dal', 'read 25 pages', '15 min chess puzzles', '10 min meditation', '20 min English speaking practice', 'UPSC 30 min editorial', '2 glasses water'].map(x => `<button class="chip ex">${x}</button>`).join('')}
+        ${['20 min sun walk', '3 eggs + 2 roti + dal', 'bowl of curd', 'read 25 pages', '15 min chess puzzles', '10 min meditation', '20 min English speaking practice', 'UPSC 30 min editorial', '2 glasses water'].map(x => `<button class="chip ex">${x}</button>`).join('')}
       </div>
     </section>
 
-    <section class="card c-5">
-      <div class="card-h"><h2>Targets</h2><button class="btn sm ghost" id="editTargets">Edit</button></div>
-      <div class="targets">
-        ${targets.map(([n, val, tar, u, p]) => `
-          <div class="target">
-            <div class="t-top"><b>${n}</b><span>${fmtN(val)} / ${fmtN(tar)} ${u}</span></div>
-            <div class="meter"><i style="width:${Math.min(100, tar ? val / tar * 100 : 0)}%;background:var(--${p})"></i></div>
-          </div>`).join('')}
-      </div>
-    </section>
-
-    <section class="card c-12">
+    <section class="card checkin">
       <div class="card-h"><h2>Check-in</h2><span class="sub">How you slept and how you feel</span></div>
       <div class="quick">
         ${stepper('sleep', 'Sleep', day.quick.sleep, 'h', 0.5)}
@@ -299,6 +295,10 @@ function viewToday(v) {
         ${stepper('screen', 'Screen time', day.quick.screen, 'h', 0.5)}
       </div>
     </section>
+
+    </div>
+
+    <section class="card c-5" id="nutritionCard">${nutritionCard(t)}</section>
 
     <section class="card c-7">
       <div class="card-h"><h2>${isToday ? 'Today’s log' : 'Log'}</h2><span class="sub">${day.entries.length} entr${day.entries.length === 1 ? 'y' : 'ies'}</span></div>
@@ -312,17 +312,28 @@ function viewToday(v) {
       </div>
     </section>
 
-    <section class="card c-5">
-      <div class="card-h"><h2>Skills & habits</h2><span class="sub">Tap one when you’ve done 15 minutes</span></div>
-      <div class="stack">
-        ${S.skills.map(k => {
-          const done = t.skills[k] > 0;
-          const st = streak(state.days, d => score(d, S).totals.skills[k] > 0, today());
-          return `<div class="row"><button class="btn sm ${done ? 'primary' : ''} skill" data-skill="${k}">${done ? '✓ ' : ''}${skillName(k)}</button>
-            <span class="sub">${done ? `${t.skills[k]} min today` : 'Not yet'}</span><span class="spacer"></span><span class="chip">🔥 ${st}</span></div>`;
-        }).join('')}
-      </div>
-    </section>
+    <div class="c-5 col">
+      <section class="card">
+        <div class="card-h"><h2>Targets</h2><button class="btn sm ghost" id="editTargets">Edit</button></div>
+        <div class="targets two">
+          ${targets.map(([n, val, tar, u, p]) => `
+            <div class="target">
+              <div class="t-top"><b>${n}</b><span>${fmtN(val)}/${fmtN(tar)}${u ? ' ' + u : ''}</span></div>
+              <div class="meter"><i style="width:${Math.min(100, tar ? val / tar * 100 : 0)}%;background:var(--${p})"></i></div>
+            </div>`).join('')}
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-h"><h2>Skills & habits</h2><span class="sub">Tap when you’ve done 15 min</span></div>
+        <div class="skills">
+          ${S.skills.map(k => {
+            const done = t.skills[k] > 0;
+            const st = streak(state.days, d => score(d, S).totals.skills[k] > 0, today());
+            return `<button class="skill ${done ? 'done' : ''}" data-skill="${k}" aria-pressed="${done}"><span class="sk-name">${done ? '✓ ' : ''}${skillName(k)}</span><span class="sk-meta">${done ? `${t.skills[k]} min today` : 'Not yet'} · 🔥 ${st}</span></button>`;
+          }).join('')}
+        </div>
+      </section>
+    </div>
   </div>`;
 
   $('#openReport').onclick = () => go('report');
@@ -340,7 +351,7 @@ function viewToday(v) {
       const d = getDay(key);
       d.entries = d.entries.filter(e => !(e.quick && e.acts?.[0]?.type === k));
     } else {
-      getDay(key).entries.push({ id: uid(), ts: Date.now(), text: `${skillName(k)} · 15 min`, quick: true, acts: [{ type: k, label: skillName(k), minutes: 15 }] });
+      getDay(key).entries.push({ id: uid(), ts: Date.now(), text: `${skillName(k)}, 15 min`, quick: true, acts: [{ type: k, label: skillName(k), minutes: 15 }] });
     }
     persist(key); render();
   });
@@ -353,18 +364,64 @@ function viewToday(v) {
     const [f, n] = b.dataset.scale.split(':'); const q = getDay(key).quick;
     q[f] = q[f] === +n ? null : +n; persist(key); render();
   });
+  const drawWeek = () => {
+    if (!window.Chart) return setTimeout(drawWeek, 120);
+    const el = $('#chWeek'); if (!el) return;
+    lines(el, week.map(weekday), PILLARS.map(([p, nm]) => ({ name: nm, data: week.map(k => hasLog(k) ? scoreOf(k)[p] : null), color: color(p), width: 2 })), { max: 100 });
+  };
+  drawWeek();
   setupMic();
   firstPaint = false;
 }
 
+// ---------- Nutrition ----------
+const MACROS = [['p', 'Protein', 4], ['c', 'Carbs', 4], ['f', 'Fat', 9]];
+const MICROS = ['fib', 'fe', 'ca', 'vc', 'b12'];
+const nutr = k => NUTRIENTS.find(x => x.k === k);
+const fmtNut = (k, v) => (k === 'kcal' || k === 'ca' || v >= 100 ? Math.round(v) : v >= 10 ? Math.round(v) : (Math.round(v * 10) / 10));
+function nutritionCard(t, { title = 'Nutrition' } = {}) {
+  const T = t.targets, n = t.n;
+  const R = 54, SW = 14, C = 2 * Math.PI * R;
+  const macroK = MACROS.map(([k, , kc]) => n[k] * kc);
+  const denom = Math.max(T.kcal, macroK.reduce((a, b) => a + b, 0), 1);
+  let off = 0;
+  const segs = MACROS.map(([k], i) => {
+    const len = macroK[i] / denom * C;
+    const seg = len > 0.5 ? `<circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--${k === 'p' ? 'protein' : k === 'c' ? 'carbs' : 'fat'})" stroke-width="${SW}" stroke-dasharray="${Math.max(0, len - 2).toFixed(1)} ${C.toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}" transform="rotate(-90 64 64)"/>` : '';
+    off += len; return seg;
+  }).join('');
+  const kcalPct = Math.round(n.kcal / T.kcal * 100);
+  return `
+    <div class="card-h"><h2>${title}</h2><span class="sub">${t.meals ? `${t.meals} meal${t.meals === 1 ? '' : 's'} logged` : 'No meals logged yet'}</span></div>
+    <div class="nut-top">
+      <svg class="donut" viewBox="0 0 128 128" role="img" aria-label="${n.kcal} of ${T.kcal} kilocalories">
+        <circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--track)" stroke-width="${SW}"/>${segs}
+        <text x="64" y="62" text-anchor="middle" class="donut-v">${Math.round(n.kcal)}</text>
+        <text x="64" y="80" text-anchor="middle" class="donut-l">of ${T.kcal} kcal</text>
+      </svg>
+      <div class="macros">
+        ${MACROS.map(([k, label]) => `<div class="macro" style="--c:var(--${k === 'p' ? 'protein' : k === 'c' ? 'carbs' : 'fat'})">
+          <div class="t-top"><b>${label}</b><span>${fmtNut(k, n[k])}/${T[k]} g</span></div>
+          <div class="meter"><i style="width:${Math.min(100, n[k] / T[k] * 100)}%"></i></div></div>`).join('')}
+        <span class="sub">${t.meals ? `${kcalPct}% of your calories so far` : 'Log a meal to fill this in'}</span>
+      </div>
+    </div>
+    <div class="micros">
+      ${MICROS.map(k => { const pct = Math.round(n[k] / T[k] * 100); const d = nutr(k); return `<div class="micro ${pct >= 100 ? 'met' : ''}">
+        <div class="t-top"><b>${d.label}</b><span>${fmtNut(k, n[k])}/${T[k]} ${d.unit}</span></div>
+        <div class="meter"><i style="width:${Math.min(100, pct)}%"></i></div></div>`; }).join('')}
+    </div>
+    <p class="nut-note">Estimates from IFCT 2017 and USDA for home-style portions. Targets: ICMR-NIN 2020. Tap a food entry to adjust portions.</p>`;
+}
+
 const fmtN = n => (n == null ? '—' : Number.isInteger(n) ? n : (+n).toFixed(1));
 function stepper(f, label, val, unit, step) {
-  return `<div class="q"><span class="k">${label}</span><span class="v">${val == null ? '—' : fmtN(val)}<small> ${unit}</small></span>
+  return `<div class="q"><div class="q-l"><span class="k">${label}</span><span class="v">${val == null ? '—' : fmtN(val)}<small> ${unit}</small></span></div>
     <div class="stepper"><button data-step="${f}:-" data-inc="${step}" aria-label="Decrease ${label}">−</button><button data-step="${f}:+" data-inc="${step}" aria-label="Increase ${label}">+</button></div></div>`;
 }
 function scale(f, label, val) {
   const words = ['', 'Low', 'Meh', 'OK', 'Good', 'Great'];
-  return `<div class="q"><span class="k">${label}<span>${val ? words[val] : ''}</span></span><span class="v">${val ?? '—'}<small> /5</small></span>
+  return `<div class="q"><div class="q-l"><span class="k">${label}</span><span class="v">${val ?? '—'}<small> /5${val ? ' ' + words[val] : ''}</small></span></div>
     <div class="scale">${[1, 2, 3, 4, 5].map(n => `<button data-scale="${f}:${n}" aria-pressed="${val === n}" aria-label="${label} ${n}">${n}</button>`).join('')}</div></div>`;
 }
 const TYPE_PILLAR = { walk: 'body', sunwalk: 'mind', run: 'body', gym: 'body', yoga: 'body', cycle: 'body', swim: 'body', sport: 'body', exercise: 'body', food: 'body', water: 'body', sleep: 'body', reading: 'brain', study: 'brain', deepwork: 'brain', english: 'brain', chess: 'brain', upsc: 'brain', meditation: 'mind', movie: 'mind', social: 'mind', screen: 'mind', other: 'neutral' };
@@ -372,33 +429,69 @@ const TYPE_NAME = { sunwalk: 'Sun walk', deepwork: 'Deep work', english: 'Englis
 function actChip(a, entryId, idx) {
   const p = TYPE_PILLAR[a.type] || 'neutral';
   const name = TYPE_NAME[a.type] || (a.type[0].toUpperCase() + a.type.slice(1));
-  const bits = [a.minutes ? `${a.minutes} min` : '', a.type === 'food' ? `${a.protein || 0} g protein` : '', a.pages ? `${a.pages} pages` : '', a.litres ? `${a.litres} L` : '', a.hours ? `${a.hours} h` : ''].filter(Boolean).join(', ');
+  const fn = a.type === 'food' ? actN(a) : null;
+  const bits = [a.minutes ? `${a.minutes} min` : '', fn ? `${Math.round(fn.kcal)} kcal, ${fmtNut('p', fn.p)} g protein` : '', a.pages ? `${a.pages} pages` : '', a.litres ? `${a.litres} L` : '', a.hours ? `${a.hours} h` : ''].filter(Boolean).join(', ');
   if (a.type === 'food' && entryId) return `<button class="pill ${p} editfood" data-e="${entryId}" data-i="${idx}" title="Tap to check or correct">${name} <span style="font-weight:500">${bits}${a.edited ? ', edited' : ''}</span> ✎</button>`;
   return `<span class="pill ${p}">${name}${bits ? ` <span style="font-weight:500">${bits}</span>` : ''}</span>`;
 }
+function actN(a) { return a.items?.length ? a.items.reduce((sum, it) => addN(sum, itemNutrients(it)), zeroN()) : (a.n || { ...zeroN(), p: Number(a.protein) || 0 }); }
 function foodBreakdown(a, entryId, idx) {
   if (a.type !== 'food' || !a.items?.length) return '';
-  return `<div class="breakdown">${a.items.map(it => it.known === false
-    ? `<button class="bd warn editfood" data-e="${entryId}" data-i="${idx}">⚠ ${esc(it.name)} · not counted, tap to add</button>`
-    : `<span class="bd">${esc(it.name)} <span class="sub">${esc(it.desc || '')}</span> <b class="num">${fmtN(it.protein)} g</b></span>`).join('')}</div>`;
+  return `<div class="breakdown">${a.items.map(it => {
+    if (it.known === false) return `<button class="bd warn editfood" data-e="${entryId}" data-i="${idx}">⚠ ${esc(it.name)}: not counted, tap to add</button>`;
+    const n = itemNutrients(it);
+    return `<button class="bd editfood" data-e="${entryId}" data-i="${idx}" title="Tap to adjust">${esc(it.name)} <span class="sub">${esc(it.desc || '')}</span> <span class="bd-n"><b class="num">${Math.round(n.kcal)}</b> <span class="sub">kcal</span> <b class="num">${fmtNut('p', n.p)} g</b> <span class="sub">protein</span></span>${it.estimated ? ' <span class="sub">(AI estimate)</span>' : ''}</button>`;
+  }).join('')}</div>`;
 }
+
+// Edit a meal: change the matched food, the number of servings, or enter label values for anything not in the table.
 function editFood(key, entryId, idx) {
   const entry = getDay(key).entries.find(e => e.id === entryId); if (!entry) return;
   const a = entry.acts[idx];
-  const items = a.items?.length ? a.items : [{ name: a.label, desc: '', protein: a.protein || 0, known: true }];
-  sheet(`<h3>Check protein</h3><p class="sub" style="margin:0 0 14px">“${esc(entry.text)}”. Change any number that looks wrong; packaged food labels give the exact value.</p>
-    <div class="stack" id="fiList">${items.map((it, j) => `
-      <div class="row" style="gap:10px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b>${esc(it.name)}</b><br><span class="sub">${esc(it.known === false ? 'not in food table, enter grams of protein' : it.desc || '')}</span></span>
-      <input class="input mono" style="width:90px" type="number" min="0" step="0.5" id="fi-${j}" value="${it.known === false ? '' : fmtN(it.protein)}" placeholder="g"><span class="sub">g</span></div>`).join('')}</div>
-    <div class="row" style="margin-top:16px"><span class="sub" id="fiTotal"></span><span class="spacer"></span><button class="btn ghost" id="fiCancel">Cancel</button><button class="btn primary" id="fiSave">Save</button></div>`);
-  const total = () => items.reduce((s, _, j) => s + (parseFloat($('#fi-' + j).value) || 0), 0);
-  const upd = () => { $('#fiTotal').textContent = `Total ${Math.round(total() * 10) / 10} g`; };
-  items.forEach((_, j) => $('#fi-' + j).addEventListener('input', upd)); upd();
+  let rows = (a.items?.length ? a.items : [{ name: a.label, known: false, n: { ...zeroN(), p: Number(a.protein) || 0 } }]).map(it => {
+    const f = it.known !== false && !it.estimated ? findFood(it.name) : null;
+    const n = itemNutrients(it);
+    return { label: it.name, food: f ? f.name : '', qty: f ? (it.qty ?? (f.p ? n.p / f.p : 1)) : 1, manual: f ? null : { kcal: n.kcal || '', p: n.p || '', c: n.c || '', f: n.f || '' } };
+  });
+  const options = sel => `<option value="" ${!sel ? 'selected' : ''}>Not in list: enter numbers</option>` + FOODS.map(f => `<option value="${esc(f.name)}" ${f.name === sel ? 'selected' : ''}>${esc(f.name)} (${esc(f.unit)})</option>`).join('');
+  const rowN = r => {
+    if (r.food) return scaleN(findFood(r.food), Math.max(0, Number(r.qty) || 0));
+    const m = r.manual || {}; return { ...zeroN(), kcal: +m.kcal || 0, p: +m.p || 0, c: +m.c || 0, f: +m.f || 0 };
+  };
+  const draw = () => {
+    $('#fiRows').innerHTML = rows.map((r, j) => `
+      <div class="fi" data-j="${j}">
+        <div class="fi-top"><select class="select fi-food" data-j="${j}" aria-label="Food">${options(r.food)}</select><button class="icon-btn fi-del" data-j="${j}" aria-label="Remove food">${I.x}</button></div>
+        ${r.food ? `<div class="fi-qty"><input class="input mono fi-q" data-j="${j}" type="number" min="0" step="0.25" value="${fmtQty(Number(r.qty) || 0)}" aria-label="Servings"><span class="sub">× ${esc(findFood(r.food).unit)}</span><span class="spacer"></span><span class="sub fi-out" data-j="${j}"></span></div>`
+          : `${r.label ? `<span class="sub">${esc(r.label)}: not in the list. Enter values from the pack label, or pick a close food above.</span>` : ''}<div class="fi-man">${[['kcal', 'kcal'], ['p', 'Protein g'], ['c', 'Carbs g'], ['f', 'Fat g']].map(([k, l]) => `<label class="field">${l}<input class="input mono fi-m" data-j="${j}" data-k="${k}" type="number" min="0" step="0.5" value="${r.manual?.[k] ?? ''}"></label>`).join('')}</div>`}
+      </div>`).join('');
+    $$('.fi-food').forEach(el => el.onchange = () => { const r = rows[+el.dataset.j]; r.food = el.value; r.qty = 1; if (!r.food) r.manual = r.manual || {}; draw(); });
+    $$('.fi-q').forEach(el => el.oninput = () => { rows[+el.dataset.j].qty = el.value; totals(); });
+    $$('.fi-m').forEach(el => el.oninput = () => { const r = rows[+el.dataset.j]; r.manual = { ...(r.manual || {}), [el.dataset.k]: el.value }; totals(); });
+    $$('.fi-del').forEach(el => el.onclick = () => { rows.splice(+el.dataset.j, 1); draw(); });
+    totals();
+  };
+  const totals = () => {
+    let sum = zeroN();
+    rows.forEach((r, j) => { const n = rowN(r); sum = addN(sum, n); const o = $(`.fi-out[data-j="${j}"]`); if (o) o.textContent = `${Math.round(n.kcal)} kcal, ${fmtNut('p', n.p)} g protein`; });
+    $('#fiTotal').innerHTML = NUTRIENTS.map(d => `<div><span class="sub">${d.label}</span><b class="num">${fmtNut(d.k, sum[d.k])} <small>${d.unit}</small></b></div>`).join('');
+  };
+  sheet(`<h3>Adjust this meal</h3><p class="sub" style="margin:0 0 14px">“${esc(entry.text)}”. Fix the food if it was matched wrong, change servings, or type values from a pack label.</p>
+    <div class="stack" id="fiRows"></div>
+    <button class="btn sm" id="fiAdd" style="margin-top:10px">+ Add a food</button>
+    <div class="fi-total" id="fiTotal"></div>
+    <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn ghost" id="fiCancel">Cancel</button><button class="btn primary" id="fiSave">Save</button></div>`);
+  draw();
+  $('#fiAdd').onclick = () => { rows.push({ label: '', food: 'roti', qty: 1, manual: null }); draw(); };
   $('#fiCancel').onclick = closeSheet;
   $('#fiSave').onclick = () => {
-    a.items = items.map((it, j) => { const v = $('#fi-' + j).value; return v === '' ? it : { ...it, protein: parseFloat(v) || 0, known: true }; });
-    a.protein = Math.round(a.items.reduce((s, it) => s + (it.protein || 0), 0));
-    a.edited = true; persist(key); closeSheet(); render(); toast(`Saved: ${a.protein} g protein`);
+    a.items = rows.filter(r => r.food ? Number(r.qty) > 0 : Object.values(r.manual || {}).some(v => +v > 0)).map(r => {
+      if (r.food) return makeItem(findFood(r.food), Number(r.qty));
+      const n = rowN(r); return { name: r.label || 'food', desc: 'entered by you', qty: 1, n, protein: round1(n.p), known: true, manualEntry: true };
+    });
+    a.n = a.items.reduce((sum, it) => addN(sum, it.n), zeroN());
+    a.protein = round1(a.n.p);
+    a.edited = true; persist(key); closeSheet(); render(); toast(`Saved: ${Math.round(a.n.kcal)} kcal, ${fmtNut('p', a.n.p)} g protein`);
   };
 }
 
@@ -510,7 +603,7 @@ function viewReport(v) {
   }
   const ach = rep.achievements?.length ? rep.achievements.map(a => ({ label: a.activity, pillar: a.pillar, effect: a.effect })) : achievements(day);
   const calOK = !!C.calendarToken();
-  const compLabels = { exercise: 'Exercise', protein: 'Protein', sleep: 'Sleep', water: 'Water', deepwork: 'Deep work', reading: 'Reading', skills: 'Skills', moodEnergy: 'Mood/energy', meditation: 'Meditation', sunlight: 'Sunlight', social: 'Social', screen: 'Screen limit' };
+  const compLabels = { exercise: 'Exercise', protein: 'Protein', nutrition: 'Diet quality', sleep: 'Sleep', water: 'Water', deepwork: 'Deep work', reading: 'Reading', skills: 'Skills', moodEnergy: 'Mood/energy', meditation: 'Meditation', sunlight: 'Sunlight', social: 'Social', screen: 'Screen limit' };
 
   v.innerHTML = `
   <section class="card">
@@ -547,17 +640,20 @@ function viewReport(v) {
       </div>
     </section>
 
-    <section class="card c-5">
+    <div class="c-5 col">
+    <section class="card">${nutritionCard(sc.totals)}</section>
+    <section class="card">
       <div class="card-h"><h2>Today in numbers</h2></div>
       <div class="targets">
         ${numberRow('Active minutes', sc.totals.activeMin, 'min', `WHO weekly: ${weekActive(key)}/150`)}
-        ${numberRow('Protein', sc.totals.protein, 'g', `target ${sc.totals.proteinTarget} g`)}
+        ${numberRow('Calories', sc.totals.meals ? Math.round(sc.totals.n.kcal) : null, 'kcal', `target ${sc.totals.targets.kcal} kcal`)}
         ${numberRow('Sleep', sc.totals.sleep, 'h', `target ${S.sleepTarget} h`)}
         ${numberRow('Deep work + study', sc.totals.deepMin, 'min', `target ${S.deepWorkTarget}`)}
         ${numberRow('Reading', sc.totals.readingMin, 'min', sc.totals.pages ? `${sc.totals.pages} pages` : `target ${S.readingTarget}`)}
         ${numberRow('Screen time', sc.totals.screen, 'h', `limit ${S.screenLimit} h`)}
       </div>
     </section>
+    </div>
 
     <section class="card c-12">
       <div class="card-h"><h2>3 moves for ${key === today() ? 'tomorrow' : fmtDay(shiftKey(key, 1))}</h2><span class="sub">${calOK ? 'Placed in your free calendar slots' : 'Connect Google Calendar to place these in free slots'}</span></div>
@@ -613,7 +709,8 @@ function viewTrends(v) {
     <div class="kpis">
       ${kpi('Avg overall', mean(scs, 'overall'), mean(prevS, 'overall'), '')}
       ${kpi('Avg sleep', avg(tot(t => t.sleep)), avg(prevS.map(s => s?.totals.sleep ?? null)), ' h', true)}
-      ${kpi('Avg protein', avg(tot(t => t.protein || null)), avg(prevS.map(s => s?.totals.protein || null)), ' g')}
+      ${kpi('Avg protein', avg(tot(t => t.meals ? t.protein : null)), avg(prevS.map(s => s?.totals.meals ? s.totals.protein : null)), ' g')}
+      ${kpi('Avg calories', avg(tot(t => t.meals ? t.n.kcal : null)), avg(prevS.map(s => s?.totals.meals ? s.totals.n.kcal : null)), ' kcal')}
       <div class="kpi"><span class="eyebrow">Active this week</span><span class="v">${activeWeek}<span class="sub"> / 150 min</span></span>
         <div class="meter"><i style="width:${Math.min(100, activeWeek / 1.5)}%;background:var(--body)"></i></div></div>
     </div>
@@ -631,6 +728,22 @@ function viewTrends(v) {
     <section class="card c-6">
       <div class="card-h"><h2>Protein</h2><span class="sub">target ${Math.round(S.weightKg * S.proteinPerKg)} g/day</span></div>
       <div class="chart-box"><canvas id="chProtein"></canvas></div>
+    </section>
+    <section class="card c-6">
+      <div class="card-h"><h2>Calories</h2><span class="sub">target ${dailyTargets(S).kcal} kcal/day</span></div>
+      <div class="chart-box"><canvas id="chKcal"></canvas></div>
+    </section>
+    <section class="card c-6">
+      <div class="card-h"><h2>Protein, carbs and fat</h2><span class="sub">grams per day</span></div>
+      <div class="chart-box"><canvas id="chMacros"></canvas></div>
+    </section>
+    <section class="card c-6">
+      <div class="card-h"><h2>Vitamins, minerals and fibre</h2><span class="sub">average % of daily need on logged days</span></div>
+      <div class="micros big">${(() => {
+        const days = scs.filter(x => x && x.totals.meals);
+        return MICROS.map(k => { const d = nutr(k); const T = dailyTargets(S); const pct = days.length ? Math.round(days.reduce((a, x) => a + x.totals.n[k], 0) / days.length / T[k] * 100) : 0;
+          return `<div class="micro ${pct >= 100 ? 'met' : ''}"><div class="t-top"><b>${d.label}</b><span>${days.length ? pct + '%' : '—'}</span></div><div class="meter"><i style="width:${Math.min(100, pct)}%"></i></div></div>`; }).join('') + (days.length ? '' : '<p class="sub">Log meals to see how your diet covers each nutrient.</p>');
+      })()}</div>
     </section>
     <section class="card c-6">
       <div class="card-h"><h2>Sleep</h2><span class="sub">target ${S.sleepTarget} h</span></div>
@@ -655,11 +768,17 @@ function viewTrends(v) {
   const draw = () => {
     if (!window.Chart) return setTimeout(draw, 120);
     lines($('#chPillars'), labels, PILLARS.map(([p, nm]) => ({ name: nm, data: series(p), color: P[p], fill: p === 'body' && n <= 30 })), { max: 100 });
-    radar($('#chRadar'), ['Exercise', 'Protein', 'Sleep', 'Deep work', 'Reading', 'Skills', 'Mood', 'Meditation'], [
+    radar($('#chRadar'), ['Exercise', 'Protein', 'Diet', 'Sleep', 'Deep work', 'Reading', 'Skills', 'Mood', 'Meditation'], [
       { name: `Last ${n} days`, data: radarData(scs), color: P.accent },
       { name: 'Before', data: radarData(prevS), color: P.muted, dash: [4, 4] }
     ]);
-    barsWithTarget($('#chProtein'), labels, tot(t => t.protein), Math.round(S.weightKg * S.proteinPerKg), P.body, 'g');
+    barsWithTarget($('#chProtein'), labels, tot(t => t.meals ? t.protein : null), Math.round(S.weightKg * S.proteinPerKg), P.body, 'g');
+    barsWithTarget($('#chKcal'), labels, tot(t => t.meals ? Math.round(t.n.kcal) : null), dailyTargets(S).kcal, color('carbs'), '');
+    stacked($('#chMacros'), labels, [
+      { name: 'Protein', data: tot(t => t.meals ? Math.round(t.n.p) : null), color: color('protein') },
+      { name: 'Carbs', data: tot(t => t.meals ? Math.round(t.n.c) : null), color: color('carbs') },
+      { name: 'Fat', data: tot(t => t.meals ? Math.round(t.n.f) : null), color: color('fat') }
+    ], 'g');
     barsWithTarget($('#chSleep'), labels, tot(t => t.sleep), S.sleepTarget, P.brain, 'h');
     stacked($('#chMinutes'), labels, [
       { name: 'Exercise', data: tot(t => t.rawExerciseMin), color: P.body },
@@ -691,9 +810,9 @@ function viewTrends(v) {
 }
 function radarData(arr) {
   const s = arr.filter(Boolean);
-  if (!s.length) return [0, 0, 0, 0, 0, 0, 0, 0];
+  if (!s.length) return [0, 0, 0, 0, 0, 0, 0, 0, 0];
   const m = f => Math.round(s.reduce((a, x) => a + f(x), 0) / s.length * 100);
-  return [m(x => x.parts.body.exercise), m(x => x.parts.body.protein), m(x => x.parts.body.sleep), m(x => x.parts.brain.deepwork), m(x => x.parts.brain.reading), m(x => x.parts.brain.skills), m(x => x.parts.mind.moodEnergy), m(x => x.parts.mind.meditation)];
+  return [m(x => x.parts.body.exercise), m(x => x.parts.body.protein), m(x => x.parts.body.nutrition || 0), m(x => x.parts.body.sleep), m(x => x.parts.brain.deepwork), m(x => x.parts.brain.reading), m(x => x.parts.brain.skills), m(x => x.parts.mind.moodEnergy), m(x => x.parts.mind.meditation)];
 }
 function kpi(label, val, prev, unit, decimals) {
   const d = val != null && prev != null ? val - prev : null;
@@ -940,6 +1059,7 @@ function viewSettings(v) {
         ${field('name', 'Name', 'text')}
         ${field('weightKg', 'Body weight (kg)', 'number', 1)}
         ${field('proteinPerKg', 'Protein (g per kg)', 'number', 0.1)}
+        ${field('calorieTarget', 'Calories (kcal/day)', 'number', 50)}
         ${field('sleepTarget', 'Sleep target (h)', 'number', 0.5)}
         ${field('waterTarget', 'Water target (L)', 'number', 0.25)}
         ${field('exerciseTarget', 'Exercise (min/day)', 'number', 5)}
@@ -948,7 +1068,7 @@ function viewSettings(v) {
         ${field('meditationTarget', 'Meditation (min/day)', 'number', 1)}
         ${field('screenLimit', 'Leisure screen limit (h)', 'number', 0.5)}
       </div>
-      <p class="sub" style="margin-top:12px">Protein target: <b class="num">${Math.round(S.weightKg * S.proteinPerKg)} g/day</b>. ISSN suggests 1.4–2.0 g/kg for active people.</p>
+      <p class="sub" style="margin-top:12px">Daily food targets: ${(() => { const T = dailyTargets(S); return `<b>${T.kcal} kcal</b>, protein <b>${T.p} g</b>, carbs <b>${T.c} g</b>, fat <b>${T.f} g</b>, fibre <b>${T.fib} g</b>, iron <b>${T.fe} mg</b>, calcium <b>${T.ca} mg</b>, vitamin C <b>${T.vc} mg</b>, B12 <b>${T.b12} µg</b>`; })()}.<br>Protein: ISSN suggests 1.4–2.0 g/kg for active people. Calories: ICMR-NIN 2020 gives about 2100 (desk-bound) to 2700 (moderately active) for a 65 kg man. Carbs 55% and fat 25% of calories; micronutrients are ICMR-NIN 2020 RDAs for adult men.</p>
       <hr class="sep" style="margin:14px 0">
       <span class="eyebrow">Skills & habits tracked</span>
       <div class="row" style="margin-top:10px">${Object.entries(SKILL_LABELS).map(([k, l]) => `<button class="btn sm ${S.skills.includes(k) ? 'primary' : ''} sk" data-k="${k}">${S.skills.includes(k) ? '✓ ' : ''}${l}</button>`).join('')}</div>
@@ -1014,7 +1134,7 @@ function viewSettings(v) {
   $$('[data-set]').forEach(inp => inp.onchange = () => {
     const k = inp.dataset.set; S[k] = inp.type === 'number' ? +inp.value : inp.value; saveSettings();
     if (k !== 'name') toast('Saved');
-    if (['weightKg', 'proteinPerKg'].includes(k)) render();
+    if (['weightKg', 'proteinPerKg', 'calorieTarget'].includes(k)) render();
   });
   $$('.sk').forEach(b => b.onclick = () => { const k = b.dataset.k; S.skills = S.skills.includes(k) ? S.skills.filter(x => x !== k) : [...S.skills, k]; saveSettings(); render(); });
 
@@ -1146,6 +1266,17 @@ const addMin = (t, m) => { const [h, mm] = t.split(':').map(Number); const x = M
     if (e.via === 'gemini' || e.via === 'claude' || e.quick) continue;
     if (!(e.acts || []).some(a => a.type === 'food' && !a.items && !a.edited)) continue;
     e.acts = parseLocal(e.text); d.updatedAt = Date.now(); changed = true;
+  }
+  for (const d of Object.values(state.days)) for (const e of d.entries || []) for (const a of e.acts || []) {
+    if (a.type !== 'food' || !a.items?.length || a.items.every(it => it.n && typeof it.n.kcal === 'number')) continue;
+    a.items = a.items.map(it => {
+      if (it.n && typeof it.n.kcal === 'number') return it;
+      const f = it.known !== false ? findFood(it.name) : null;
+      if (f) { const qty = it.qty ?? (f.p ? (Number(it.protein) || 0) / f.p : 1); return { ...it, qty, unit: f.unit, n: scaleN(f, qty) }; }
+      return { ...it, n: { ...zeroN(), p: Number(it.protein) || 0 } };
+    });
+    a.n = a.items.reduce((sum, it) => addN(sum, it.n), zeroN());
+    d.updatedAt = Date.now(); changed = true;
   }
   if (changed) save();
 })();
