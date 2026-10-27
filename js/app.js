@@ -37,7 +37,8 @@ const I = {
   moon: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>',
   auto: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>',
   log: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
-  info: '<svg viewBox="0 0 24 24" class="info-ic"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 8v.01"/></svg>'
+  info: '<svg viewBox="0 0 24 24" class="info-ic"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 8v.01"/></svg>',
+  chat: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H5l1.6-3.2A8 8 0 1 1 21 12z"/></svg>'
 };
 
 const NAV = [
@@ -339,6 +340,7 @@ function viewToday(v) {
 
   $('#nutSrcToggle')?.addEventListener('change', e => { ui.showNutrientSources = e.target.checked; render(); });
   $('.nut-suggest')?.addEventListener('click', () => openNutrientSuggestions(t));
+  $('.nut-ask')?.addEventListener('click', () => openAskJarvis(t));
   $('#openReport').onclick = () => go('report');
   $('#editTargets').onclick = () => { go('settings'); setTimeout(() => $('#sec-profile')?.scrollIntoView({ behavior: 'smooth' }), 50); };
   $('#logBtn').onclick = () => submitLog();
@@ -472,6 +474,7 @@ function nutritionCard(t, { title = 'Nutrition', entries = [] } = {}) {
         <span class="switch-label">Show sources</span>
       </label>
       <button type="button" class="btn sm ghost nut-suggest">${I.spark} What to eat</button>
+      <button type="button" class="btn sm ghost nut-ask">${I.chat} Ask Jarvis</button>
     </div>
     <div class="nut-top">
       <svg class="donut" viewBox="0 0 128 128" role="img" aria-label="${n.kcal} of ${T.kcal} kilocalories">
@@ -561,6 +564,58 @@ function openNutrientSuggestions(t) {
     } catch (e) { $('#messPicks').innerHTML = `<p class="sub">${esc((e.message || 'Something went wrong').slice(0, 140))}</p>`; }
     finally { btn.remove(); }
   });
+}
+
+// ---------- Ask Jarvis: a small side chat, not a report ----------
+let chatHistory = [];
+function chatBubbles() {
+  return chatHistory.map(m => `<div class="chat-msg ${m.role}">${esc(m.text)}</div>`).join('');
+}
+function localChatReply(t, question) {
+  const gaps = nutrientGaps(t);
+  if (!gaps.length) return "You're basically on target today — eat whatever sounds good, you've earned it.";
+  const g = gaps[0], d = nutr(g.k), picks = pickFoodsFor(g.k, g.gap);
+  const pick = picks[0];
+  if (!pick) return `You're a bit short on ${d.label.toLowerCase()} today, but I can't find a good source in your food table for it.`;
+  return `You're ${fmtNut(g.k, g.gap)} ${d.unit} short on ${d.label.toLowerCase()} today — ${fmtQty(pick.servings)}× ${pick.food.name} (${pick.food.unit}) would close most of that gap.`;
+}
+function openAskJarvis(t) {
+  chatHistory = [];
+  const gaps = nutrientGaps(t);
+  const opener = gaps.length ? `Hey! You're a bit short on ${nutr(gaps[0].k).label.toLowerCase()} so far today. What do you want to eat, or ask me anything.` : "Hey! You're on track today. What's up?";
+  sheet(`<h3>Ask Jarvis</h3>
+    <div class="chat-log" id="chatLog"><div class="chat-msg jarvis">${esc(opener)}</div></div>
+    <div class="row chat-input-row" style="margin-top:12px">
+      <input class="input" id="chatInput" placeholder="e.g. I want to build muscle, what should I eat tonight?">
+      <button class="btn primary sm" id="chatSend">${I.send}</button>
+    </div>
+    <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn ghost" id="chatClose">Close</button></div>`);
+  $('#chatClose').onclick = closeSheet;
+  const send = async () => {
+    const input = $('#chatInput'); const text = input.value.trim();
+    if (!text) return;
+    chatHistory.push({ role: 'user', text });
+    input.value = '';
+    const log = $('#chatLog'); log.innerHTML = chatBubbles(); log.scrollTop = log.scrollHeight;
+    if (!G.provider(S)) {
+      chatHistory.push({ role: 'jarvis', text: localChatReply(t, text) });
+      log.innerHTML = chatBubbles(); log.scrollTop = log.scrollHeight;
+      return;
+    }
+    log.innerHTML = chatBubbles() + `<div class="chat-msg jarvis typing"><span class="spin"></span></div>`;
+    log.scrollTop = log.scrollHeight;
+    try {
+      const T = t.targets, n = t.n;
+      const summary = { targets: T, so_far: n, meals_logged: t.meals };
+      const reply = await G.askCoach(S, { summary, menuText: S.messMenu || null, history: chatHistory.slice(0, -1), question: text });
+      chatHistory.push({ role: 'jarvis', text: reply || "Hmm, I didn't get that — try asking differently?" });
+    } catch (e) {
+      chatHistory.push({ role: 'jarvis', text: `Couldn't reach ${G.providerName(S)} (${(e.message || 'error').slice(0, 60)}). Try again?` });
+    }
+    log.innerHTML = chatBubbles(); log.scrollTop = log.scrollHeight;
+  };
+  $('#chatSend').onclick = send;
+  $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 }
 
 const fmtN = n => (n == null ? '—' : Number.isInteger(n) ? n : (+n).toFixed(1));
@@ -868,6 +923,7 @@ function viewReport(v) {
   $('#regen').onclick = () => generateReport(key);
   $('#nutSrcToggle')?.addEventListener('change', e => { ui.showNutrientSources = e.target.checked; render(); });
   $('.nut-suggest')?.addEventListener('click', () => openNutrientSuggestions(sc.totals));
+  $('.nut-ask')?.addEventListener('click', () => openAskJarvis(sc.totals));
   $$('.addcal').forEach(b => b.onclick = async () => {
     const s = rep.suggestions[+b.dataset.i]; const slot = rep.slots[s.slotIndex];
     b.disabled = true;

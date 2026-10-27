@@ -126,3 +126,14 @@ export async function messMenuSuggestions(settings, payload) {
   const prompt = `Weekly mess menu (as transcribed, may be messy):\n"""${payload.menuText}"""\n\nToday is ${payload.weekday}, current time ${payload.timeLabel}.\nNutrient gaps still to close today: ${payload.gaps.map(g => `${g.label} (${g.gap} ${g.unit} short)`).join(', ') || 'none significant'}.\n\nReturn {"picks":[{"meal":"name of the upcoming meal, e.g. Lunch","items":["1-3 dish names, exactly as in the menu"],"why":"1 short sentence: which gap(s) this helps and why"}]} covering only meals still ahead today. If nothing in today's remaining menu clearly helps, return {"picks":[]}.`;
   return generate(settings, system, prompt, 'quick');
 }
+
+// ---------- Ask Jarvis: a short, casual side chat, not a report ----------
+export async function askCoach(settings, payload) {
+  const system = `You are Jarvis, ${settings.name}'s friend who happens to know exactly what they've logged today. Reply like a real friend texting back: 2-4 short sentences, warm and direct, no bullet points, no headers, no "as an AI" disclaimers. Only recommend dishes from the mess menu text if one is given; otherwise suggest realistic home/mess-style Indian food. Ground advice in the actual numbers given (today's targets and how much is left). Answer the question asked — don't just repeat the numbers back.`;
+  const prompt = `Today so far: ${JSON.stringify(payload.summary)}
+${payload.menuText ? `This week's mess menu:\n"""${payload.menuText}"""\n` : ''}${payload.history?.length ? `Conversation so far:\n${payload.history.map(h => `${h.role === 'user' ? settings.name : 'Jarvis'}: ${h.text}`).join('\n')}\n` : ''}${settings.name}: ${payload.question}
+
+Return {"reply": "Jarvis's next message, in character, 2-4 sentences"}`;
+  const out = await generate(settings, system, prompt, 'quick');
+  return out?.reply || '';
+}
