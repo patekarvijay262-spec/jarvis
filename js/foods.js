@@ -293,6 +293,14 @@ function matchFoods(part) {
     }
     if (grams) { const gr = parseFloat(grams[1]); return applyFeedback(h.f, makeItem(h.f, gr / h.f.g, `${gr} g`), ctx); }
     if (ml) { const v = parseFloat(ml[1]); return applyFeedback(h.f, makeItem(h.f, v / h.f.g, `${v} ml`), ctx); }
+    // "2 spoon peanuts" said in a different unit than the table's own (a handful) — convert by real
+    // spoon size instead of silently treating "2 spoons" as "2 handfuls" (≈3x too much).
+    const spoonWord = before.match(/\b(tbsp|tablespoons?|tsp|teaspoons?|spoons?)\s*$/i);
+    if (spoonWord && !/tbsp|tsp|tablespoon|teaspoon|\bspoon\b/i.test(h.f.unit)) {
+      const w = spoonWord[1].toLowerCase();
+      const perSpoonG = /^tbsp|^tablespoon/.test(w) ? 15 : /^tsp|^teaspoon/.test(w) ? 5 : 10; // bare "spoon" is ambiguous — assume a modest teaspoon-ish scoop
+      return applyFeedback(h.f, makeItem(h.f, (qty * perSpoonG) / h.f.g, `${fmtQty(qty)} spoon (~${Math.round(qty * perSpoonG)} g)`), ctx);
+    }
     const servings = qty * size;
     return applyFeedback(h.f, makeItem(h.f, servings, `${sizeLabel ? sizeLabel + ' ' : ''}${qty !== 1 ? fmtQty(qty) + ' × ' : ''}${h.f.unit}`), ctx);
   });
