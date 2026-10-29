@@ -47,7 +47,8 @@ const RULES = [
   { type: 'cycle',      re: /cycl|bike/ },
   { type: 'swim',       re: /swim/ },
   { type: 'sport',      re: /football|cricket|badminton|basketball|volleyball|tennis|table tennis|tt\b|squash|kabaddi|played/ },
-  { type: 'walk',       re: /\bwalk|steps\b/ },
+  { type: 'walk',       re: /\bwalk/ },
+  { type: 'steps',      re: /\b\d[\d,]*\s*steps\b/ },
   { type: 'meditation', re: /meditat|breathwork|pranayam|mindful/ },
   { type: 'english',    re: /english|speaking practice|spoke|shadowing|toastmaster/ },
   { type: 'chess',      re: /chess|puzzles?\b|lichess|rapid game|blitz/ },
@@ -132,6 +133,10 @@ export function parseLocal(text) {
       const s = lc.match(/(\d[\d,]*)\s*steps/);
       if (s) { a.steps = parseInt(s[1].replace(/,/g, ''), 10); if (a.minutes == null) a.minutes = Math.round(a.steps / 100); }
       if (rule.type === 'sunwalk') a.sun = true;
+    }
+    if (rule.type === 'steps') {
+      const s = lc.match(/(\d[\d,]*)\s*steps/);
+      if (s) a.steps = parseInt(s[1].replace(/,/g, ''), 10);
     }
     if (rule.type === 'gym') {
       const ex = parseExercise(chunk, state.settings?.weightKg || 70);

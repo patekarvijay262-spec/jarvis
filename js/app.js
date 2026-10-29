@@ -806,9 +806,11 @@ function submitLog() {
   const key = ui.date;
   const ts = key === today() ? Date.now() : new Date(key + 'T20:00:00').getTime();
   const id = uid();
-  const localActs = clean(parseLocal(text));
+  let localActs = clean(parseLocal(text));
   const sleepAct = localActs.find(a => a.type === 'sleep' && a.sleepFrom && a.sleepTo);
   if (sleepAct) Object.assign(getDay(key).quick, { sleepFrom: sleepAct.sleepFrom, sleepTo: sleepAct.sleepTo, sleep: sleepAct.hours });
+  const stepsAct = localActs.find(a => a.type === 'steps' && a.steps != null);
+  if (stepsAct) { getDay(key).quick.steps = stepsAct.steps; localActs = localActs.filter(a => a.type !== 'steps'); }
   getDay(key).entries.push({ id, ts, text, acts: localActs, via: 'local' });
   persist(key);
   render();
