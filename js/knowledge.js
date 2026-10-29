@@ -124,6 +124,7 @@ export const DEFAULT_SETTINGS = {
   goal: 'general_health',
   sleepTarget: 8,
   waterTarget: 3,
+  stepsTarget: 8000,
   exerciseTarget: 30,
   deepWorkTarget: 180,
   readingTarget: 20,

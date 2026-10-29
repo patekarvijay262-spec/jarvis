@@ -1,5 +1,7 @@
 // Local free-text parser. Works offline; Gemini replaces it when a key is set.
 import { parseFood, addN, zeroN } from './foods.js';
+import { parseExercise } from './exercises.js';
+import { state } from './store.js';
 
 const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, half: 0.5 };
 
@@ -9,6 +11,21 @@ function num(s) {
   if (NUM_WORDS[t] != null) return NUM_WORDS[t];
   const n = parseFloat(t);
   return Number.isFinite(n) ? n : null;
+}
+
+// "11pm" / "11:30 pm" / "23:00" → "HH:MM" (24 h). Returns null if unparseable.
+function to24(s) {
+  const m = String(s).trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10); const min = m[2] ? parseInt(m[2], 10) : 0; const ap = m[3]?.toLowerCase();
+  if (ap === 'pm' && h < 12) h += 12;
+  if (ap === 'am' && h === 12) h = 0;
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+function hoursBetween(from, to) {
+  const [fh, fm] = from.split(':').map(Number), [th, tm] = to.split(':').map(Number);
+  return Math.round((((th * 60 + tm) - (fh * 60 + fm) + 1440) % 1440) / 60 * 4) / 4;
 }
 
 // minutes from "20 min", "1.5 hr", "1h 20m", "45m"
@@ -24,8 +41,8 @@ export function minutesIn(text) {
 
 const RULES = [
   { type: 'sunwalk',    re: /sun\s*walk|walk.*sun|sun.*walk|morning walk outside|sunlight|sunbath/ },
+  { type: 'gym',        re: /\bgym\b|\bweights?\b|\blift(ing)?\b|strength training|resistance training|workout|calisthenics|push.?ups?|pull.?ups?|chin.?ups?|\bdips?\b|sit.?ups?|crunch(es)?|\bplanks?\b|\blunges?\b|\bsquats?\b|deadlifts?|bench press|shoulder press|overhead press|military press|tricep|bicep|\bcurls?\b|lat pulldown|\brows?\b(?! house| boat)|leg press|leg (extension|curl)|\bshrugs?\b|chest fly|flyes?|pec deck|treadmill|burpees?|jumping jacks?|mountain climbers?|elliptical|rowing machine|\berg\b|ergometer|stair ?master|stair climber|stairmill|stationary (bike|cycle)|exercise bike|\bdumbbells?\b|\bbarbells?\b/ },
   { type: 'run',        re: /\brun\b|\bran\b|running|jog/ },
-  { type: 'gym',        re: /\bgym\b|weights|lift|strength|push.?ups|pull.?ups|squats|workout|calisthenics/ },
   { type: 'yoga',       re: /yoga|stretch|surya namaskar/ },
   { type: 'cycle',      re: /cycl|bike/ },
   { type: 'swim',       re: /swim/ },
@@ -55,7 +72,23 @@ export function splitChunks(text) {
 // Returns an array of activity objects.
 export function parseLocal(text) {
   const out = [];
-  const chunks = splitChunks(text);
+  // "slept at 11pm, woke up at 7am" — pull this out of the raw text first: splitting on the comma
+  // would otherwise separate "slept at 11pm" from "woke up at 7am" before they can be matched together,
+  // and the orphaned "woke up at 7am" fragment would get fuzzy-matched as food.
+  let workText = text;
+  const fromRe = /(?:slept|went to (?:bed|sleep))\s*(?:at|@)?\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?/i;
+  const wakeRe = /(?:woke|wake|got up)(?:\s*up)?\s*(?:at|@)?\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?/i;
+  const fromM = workText.match(fromRe), toM = workText.match(wakeRe);
+  if (fromM && toM) {
+    const fTime = fromM[0].match(/\d{1,2}(?::\d{2})?\s*(?:am|pm)?$/i)[0];
+    const tTime = toM[0].match(/\d{1,2}(?::\d{2})?\s*(?:am|pm)?$/i)[0];
+    const from = to24(fTime), to = to24(tTime);
+    if (from && to) {
+      out.push({ type: 'sleep', label: `${fromM[0].trim()}, ${toM[0].trim()}`, sleepFrom: from, sleepTo: to, hours: hoursBetween(from, to) });
+      workText = workText.replace(fromRe, '').replace(wakeRe, '');
+    }
+  }
+  const chunks = splitChunks(workText);
   for (const chunk of chunks) {
     const lc = chunk.toLowerCase();
     const food = parseFood(chunk);
@@ -99,6 +132,10 @@ export function parseLocal(text) {
       const s = lc.match(/(\d[\d,]*)\s*steps/);
       if (s) { a.steps = parseInt(s[1].replace(/,/g, ''), 10); if (a.minutes == null) a.minutes = Math.round(a.steps / 100); }
       if (rule.type === 'sunwalk') a.sun = true;
+    }
+    if (rule.type === 'gym') {
+      const ex = parseExercise(chunk, state.settings?.weightKg || 70);
+      if (ex) { a.items = ex.items; a.kcal = ex.kcal; a.minutes = a.minutes ?? ex.minutes; }
     }
     if (rule.type === 'sleep') {
       const h = lc.match(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours)/);

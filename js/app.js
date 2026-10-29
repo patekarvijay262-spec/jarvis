@@ -206,7 +206,11 @@ function ribbon(day, key) {
   const H = 1440, pct = m => `${(Math.max(0, Math.min(H, m)) / H * 100).toFixed(2)}%`;
   const start = new Date(key + 'T00:00:00').getTime();
   const parts = [];
-  if (day.quick.sleep) {
+  if (day.quick.sleepFrom && day.quick.sleepTo) {
+    const [fh, fm] = day.quick.sleepFrom.split(':').map(Number), [th, tm] = day.quick.sleepTo.split(':').map(Number);
+    const from = fh * 60 + fm, wake = th * 60 + tm;
+    parts.push(`<div class="blk sleep" style="left:${pct(from)};width:${pct((wake - from + 1440) % 1440 || 1440)}" title="Slept ${day.quick.sleepFrom}–${day.quick.sleepTo} (${fmtN(day.quick.sleep)} h)"></div>`);
+  } else if (day.quick.sleep) {
     const [h, m] = (S.morningTime || '07:30').split(':').map(Number);
     const wake = h * 60 + m, from = wake - day.quick.sleep * 60;
     parts.push(`<div class="blk sleep" style="left:${pct(from)};width:${pct(wake - Math.max(0, from))}" title="Sleep ${day.quick.sleep} h"></div>`);
@@ -241,6 +245,7 @@ function viewToday(v) {
     ['Exercise', t.activeMin, S.exerciseTarget, 'min', 'body'],
     ['Sleep', t.sleep ?? 0, S.sleepTarget, 'h', 'body'],
     ['Water', t.water, S.waterTarget, 'L', 'body'],
+    ['Steps', day.quick.steps || 0, S.stepsTarget, '', 'body'],
     ['Deep work', t.deepMin, S.deepWorkTarget, 'min', 'brain'],
     ['Reading', t.readingMin, S.readingTarget, 'min', 'brain'],
     ['Skills', brainSkills.filter(k => t.skills[k] > 0).length, brainSkills.length, '', 'brain'],
@@ -297,8 +302,9 @@ function viewToday(v) {
     <section class="card checkin">
       <div class="card-h"><h2>Check-in</h2><span class="sub">How you slept and how you feel</span></div>
       <div class="quick">
-        ${stepper('sleep', 'Sleep', day.quick.sleep, 'h', 0.5)}
+        ${sleepWidget(day.quick)}
         ${stepper('water', 'Water', t.water, 'L', 0.25)}
+        ${stepper('steps', 'Steps', day.quick.steps, '', 500)}
         ${scale('mood', 'Mood', day.quick.mood)}
         ${scale('energy', 'Energy', day.quick.energy)}
         ${stepper('screen', 'Screen time', day.quick.screen, 'h', 0.5)}
@@ -320,6 +326,8 @@ function viewToday(v) {
           </div>`).join('') : `<div class="empty">${I.log}<b>No entries yet</b><span>Write one line about anything you did. Jarvis turns it into numbers.</span></div>`}
       </div>
     </section>
+
+    <section class="card c-5" id="fitnessCard">${fitnessCard(day)}</section>
 
     <div class="c-5 col">
       <section class="card">
@@ -406,6 +414,15 @@ function viewToday(v) {
     q[f] = Math.max(0, +(((q[f] ?? (f === 'sleep' ? S.sleepTarget - 0.5 : 0)) + (dir === '+' ? step : -step))).toFixed(2));
     persist(key); render();
   });
+  const onSleepTime = () => {
+    const q = getDay(key).quick;
+    q.sleepFrom = $('#sleepFrom').value; q.sleepTo = $('#sleepTo').value;
+    const h = sleepHours(q.sleepFrom, q.sleepTo);
+    if (h != null) q.sleep = h;
+    persist(key); render();
+  };
+  $('#sleepFrom')?.addEventListener('change', onSleepTime);
+  $('#sleepTo')?.addEventListener('change', onSleepTime);
   $$('[data-scale]').forEach(b => b.onclick = () => {
     const [f, n] = b.dataset.scale.split(':'); const q = getDay(key).quick;
     q[f] = q[f] === +n ? null : +n; persist(key); render();
@@ -418,6 +435,39 @@ function viewToday(v) {
   drawWeek();
   setupMic();
   firstPaint = false;
+}
+
+// ---------- Fitness ----------
+function fitnessTotals(entries) {
+  let kcal = 0, minutes = 0;
+  const items = [];
+  for (const e of entries || []) {
+    for (const a of e.acts || []) {
+      if (a.type !== 'gym') continue;
+      kcal += Number(a.kcal) || 0;
+      minutes += Number(a.minutes) || 0;
+      for (const it of a.items || []) items.push({ ...it, ts: e.ts });
+    }
+  }
+  return { kcal: Math.round(kcal), minutes: Math.round(minutes), items: items.sort((a, b) => b.kcal - a.kcal) };
+}
+function fitnessCard(day, title = 'Fitness') {
+  const f = fitnessTotals(day.entries);
+  const steps = day.quick.steps || 0;
+  const stepsTarget = S.stepsTarget || 8000;
+  return `
+    <div class="card-h"><h2>${title}</h2><span class="sub">${f.items.length ? `${f.items.length} exercise${f.items.length === 1 ? '' : 's'} logged` : 'No workout logged yet'}</span></div>
+    <div class="fit-top">
+      <div class="fit-stat"><b class="num">${f.kcal}</b><span class="sub">kcal burned</span></div>
+      <div class="fit-stat"><b class="num">${f.minutes}</b><span class="sub">active min</span></div>
+      <div class="fit-stat"><b class="num">${steps.toLocaleString()}</b><span class="sub">steps</span></div>
+    </div>
+    <div class="t-top" style="margin-top:14px"><b>Steps</b><span>${steps.toLocaleString()}/${stepsTarget.toLocaleString()}</span></div>
+    <div class="meter"><i style="width:${Math.min(100, steps / stepsTarget * 100)}%;background:var(--body)"></i></div>
+    ${f.items.length
+      ? `<div class="breakdown" style="margin-top:16px">${f.items.map(it => `<span class="bd">${esc(it.name)} <span class="sub">${esc(it.desc || '')}</span> <span class="bd-n"><b class="num">${it.kcal}</b> <span class="sub">kcal</span></span></span>`).join('')}</div>`
+      : `<p class="nut-note">Log pushups, pullups, a gym set or a treadmill run in “What did you do?” — Jarvis estimates calories from reps, time and your body weight, or uses the number your machine shows.</p>`}
+  `;
 }
 
 // ---------- Nutrition ----------
@@ -653,13 +703,31 @@ function scale(f, label, val) {
   return `<div class="q"><div class="q-l"><span class="k">${label}</span><span class="v">${val ?? '—'}<small> /5${val ? ' ' + words[val] : ''}</small></span></div>
     <div class="scale">${[1, 2, 3, 4, 5].map(n => `<button data-scale="${f}:${n}" aria-pressed="${val === n}" aria-label="${label} ${n}">${n}</button>`).join('')}</div></div>`;
 }
+// Hours asleep from a bedtime/wake-time pair, handling the overnight wrap (e.g. 23:30 → 07:00 = 7.5 h).
+function sleepHours(from, to) {
+  if (!from || !to) return null;
+  const [fh, fm] = from.split(':').map(Number), [th, tm] = to.split(':').map(Number);
+  if ([fh, fm, th, tm].some(Number.isNaN)) return null;
+  const mins = (th * 60 + tm - (fh * 60 + fm) + 1440) % 1440;
+  return Math.round((mins / 60) * 4) / 4; // nearest 15 min
+}
+function sleepWidget(q) {
+  const hrs = q.sleep;
+  return `<div class="q sleep-q">
+    <div class="q-l"><span class="k">Sleep</span><span class="v">${hrs == null ? '—' : fmtN(hrs)}<small> h</small></span></div>
+    <div class="sleep-times">
+      <label class="field sm">Slept<input class="input mono" type="time" id="sleepFrom" value="${esc(q.sleepFrom || '')}"></label>
+      <label class="field sm">Woke<input class="input mono" type="time" id="sleepTo" value="${esc(q.sleepTo || '')}"></label>
+    </div>
+  </div>`;
+}
 const TYPE_PILLAR = { walk: 'body', sunwalk: 'mind', run: 'body', gym: 'body', yoga: 'body', cycle: 'body', swim: 'body', sport: 'body', exercise: 'body', food: 'body', water: 'body', sleep: 'body', reading: 'brain', study: 'brain', deepwork: 'brain', english: 'brain', chess: 'brain', upsc: 'brain', meditation: 'mind', movie: 'mind', social: 'mind', screen: 'mind', other: 'neutral' };
 const TYPE_NAME = { sunwalk: 'Sun walk', deepwork: 'Deep work', english: 'English', upsc: 'UPSC', food: 'Food' };
 function actChip(a, entryId, idx) {
   const p = TYPE_PILLAR[a.type] || 'neutral';
   const name = TYPE_NAME[a.type] || (a.type[0].toUpperCase() + a.type.slice(1));
   const fn = a.type === 'food' ? actN(a) : null;
-  const bits = [a.minutes ? `${a.minutes} min` : '', fn ? `${Math.round(fn.kcal)} kcal, ${fmtNut('p', fn.p)} g protein` : '', a.pages ? `${a.pages} pages` : '', a.litres ? `${a.litres} L` : '', a.hours ? `${a.hours} h` : ''].filter(Boolean).join(', ');
+  const bits = [a.minutes ? `${a.minutes} min` : '', fn ? `${Math.round(fn.kcal)} kcal, ${fmtNut('p', fn.p)} g protein` : '', a.type === 'gym' && a.kcal ? `${Math.round(a.kcal)} kcal` : '', a.pages ? `${a.pages} pages` : '', a.litres ? `${a.litres} L` : '', a.hours ? `${a.hours} h` : ''].filter(Boolean).join(', ');
   if (a.type === 'food' && entryId) return `<button class="pill ${p} editfood" data-e="${entryId}" data-i="${idx}" title="Tap to check or correct">${name} <span style="font-weight:500">${bits}${a.edited ? ', edited' : ''}</span> ✎</button>`;
   return `<span class="pill ${p}">${name}${bits ? ` <span style="font-weight:500">${bits}</span>` : ''}</span>`;
 }
@@ -739,6 +807,8 @@ function submitLog() {
   const ts = key === today() ? Date.now() : new Date(key + 'T20:00:00').getTime();
   const id = uid();
   const localActs = clean(parseLocal(text));
+  const sleepAct = localActs.find(a => a.type === 'sleep' && a.sleepFrom && a.sleepTo);
+  if (sleepAct) Object.assign(getDay(key).quick, { sleepFrom: sleepAct.sleepFrom, sleepTo: sleepAct.sleepTo, sleep: sleepAct.hours });
   getDay(key).entries.push({ id, ts, text, acts: localActs, via: 'local' });
   persist(key);
   render();
@@ -917,6 +987,7 @@ function viewReport(v) {
 
     <div class="c-5 col">
     <section class="card">${nutritionCard(sc.totals, { entries: day.entries })}</section>
+    <section class="card">${fitnessCard(day)}</section>
     <section class="card">
       <div class="card-h"><h2>Today in numbers</h2></div>
       <div class="targets">
@@ -1391,6 +1462,7 @@ function viewSettings(v) {
         ${field('calorieTarget', 'Calories (kcal/day)', 'number', 50)}
         ${field('sleepTarget', 'Sleep target (h)', 'number', 0.5)}
         ${field('waterTarget', 'Water target (L)', 'number', 0.25)}
+        ${field('stepsTarget', 'Steps target', 'number', 500)}
         ${field('exerciseTarget', 'Exercise (min/day)', 'number', 5)}
         ${field('deepWorkTarget', 'Deep work (min/day)', 'number', 15)}
         ${field('readingTarget', 'Reading (min/day)', 'number', 5)}
