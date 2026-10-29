@@ -31,7 +31,8 @@ Commit and push to `main`. GitHub Pages rebuilds in about a minute.
 | `css/styles.css` | Design tokens (light + dark) and all layout. Later `/* v4 */` blocks override earlier rules |
 | `js/app.js` | All screens: Today, Report, Trends, Plan, Friends, Settings; logging, meal editor, sync wiring |
 | `js/foods.js` | Indian food table with 9 nutrients per serving, food-phrase parser, daily targets |
-| `js/parser.js` | Offline free-text parser → activity objects; merges foods in one line into one meal |
+| `js/exercises.js` | Exercise table (MET-based), calorie estimate from reps/time/weight or a device-reported kcal figure |
+| `js/parser.js` | Offline free-text parser → activity objects; merges foods in one line into one meal; itemizes gym acts via exercises.js |
 | `js/scoring.js` | Deterministic Body/Brain/Mind scores, grades, streaks, rule-based suggestions |
 | `js/knowledge.js` | Evidence base (WHO, ICMR-NIN, ISSN, sleep science), activity effects, default settings |
 | `js/gemini.js` | Gemini API (key from Google AI Studio, stored in browser): log parsing, report card, morning plan |
