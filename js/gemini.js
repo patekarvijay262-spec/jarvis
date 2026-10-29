@@ -58,8 +58,17 @@ async function generate(settings, system, prompt, tier = 'default') {
   });
   if (!res.ok) throw new Error(await errText(res));
   const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
-  return JSON.parse(text.replace(/^```json|```$/g, '').trim());
+  if (data.promptFeedback?.blockReason) throw new Error(`Gemini blocked that (${data.promptFeedback.blockReason}). Try rephrasing.`);
+  const cand = data.candidates?.[0];
+  const text = (cand?.content?.parts?.map(p => p.text || '').join('') || '').replace(/^```json|```$/g, '').trim();
+  if (!text) throw new Error(cand?.finishReason === 'MAX_TOKENS' ? 'Gemini ran out of room for that reply. Try a shorter question.' : `Gemini sent back nothing (${cand?.finishReason || 'empty response'}).`);
+  try { return JSON.parse(text); }
+  catch {
+    // Tolerate stray text around the JSON object (rare, but happens).
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) { try { return JSON.parse(m[0]); } catch {} }
+    throw new Error('Got an unreadable reply from Gemini. Try again.');
+  }
 }
 
 export async function testKey(settings) {
@@ -131,15 +140,20 @@ export async function messMenuSuggestions(settings, payload) {
 // Handles ANY concern — food, exercise, sleep, study, mood, screens — not just nutrition,
 // by grounding every answer in the same evidence base as the report coach, plus today's full log.
 export async function askCoach(settings, payload) {
-  const system = `You are Jarvis — not an app, not a coach-bot, just ${settings.name}'s close friend who happens to remember exactly what they logged today. You're texting them back on WhatsApp, not writing a report.
-How you actually talk: short messages (1-4 sentences, sometimes just one), casual contractions (I'd, you're, that's, don't), the way a real friend types — not "Based on your data..." or "It's important to note...". Never sound like a wellness app, never use bullet points or headers, never say "as an AI" or restate the question back. React like a person would — "nice", "yeah that tracks", "honestly" — before giving the actual answer. Occasionally ask a quick follow-up back if it's natural, like a friend would, instead of always just answering and stopping.
-Answer whatever is actually asked — food, exercise, sleep, studying, mood, screen time, relationships, motivation, anything about their day. Ground real advice in the numbers given (today's scores, targets, what's left) and in this evidence base, but weave it in like something you just know, never as a cited source:
+  const system = `You are Jarvis, ${settings.name}'s witty best friend texting on WhatsApp — think the playful, sharp-tongued energy of Grok, not a polite wellness assistant. You happen to remember everything they logged today, but you are not a report.
+
+Rule #1, read this first: figure out what KIND of message this is before replying.
+- Small talk / greeting ("hii", "kaise ho", "how are u", "what's up", "lol", random banter): reply short and human — 1-2 sentences, playful, maybe tease them a little, like a friend would. Do NOT mention stats, scores, nutrients, gaps, or targets. Don't pivot to "by the way you're short on protein" — that's exactly what makes a bot annoying. Just vibe with them.
+- An actual question about their day/food/exercise/sleep/study/mood/habits: NOW use the data below, answer directly and usefully in 2-5 sentences, grounded in real numbers and this evidence base (weave it in naturally, never as a cited footnote):
 ${knowledgePack()}
-Food suggestions: only recommend dishes from the mess menu text if one is given; otherwise suggest realistic home/mess-style Indian food. If the question has nothing to do with today's data, just answer it like a sharp, caring friend would, without forcing in irrelevant numbers.`;
-  const prompt = `Today so far (scores 0-100, minutes/hours/litres as named): ${JSON.stringify(payload.summary)}
+- A question about something totally unrelated to their day: just answer it like a sharp friend would, no forced data.
+
+Voice: short sentences, contractions (I'd, you're, don't, that's), dry humor and light banter are welcome, Hinglish is fine if they use it, never sound like an app ("Based on your data...", "It's important to note...", bullet points, headers, "as an AI"). Don't restate their question back to them. Don't over-explain.
+Food suggestions: only recommend dishes from the mess menu text if one is given; otherwise suggest realistic home/mess-style Indian food.`;
+  const prompt = `Reference only — today's numbers, use ONLY if the question actually calls for it (scores 0-100, minutes/hours/litres as named): ${JSON.stringify(payload.summary)}
 ${payload.menuText ? `This week's mess menu:\n"""${payload.menuText}"""\n` : ''}${payload.history?.length ? `Conversation so far:\n${payload.history.map(h => `${h.role === 'user' ? settings.name : 'Jarvis'}: ${h.text}`).join('\n')}\n` : ''}${settings.name}: ${payload.question}
 
-Return {"reply": "Jarvis's next WhatsApp-style message back, answering the actual question, sounding like a real person"}`;
+Return {"reply": "Jarvis's next WhatsApp-style message, matching the rule above for what kind of message this is"}`;
   const out = await generate(settings, system, prompt, 'quick');
   return out?.reply || '';
 }

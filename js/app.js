@@ -167,6 +167,13 @@ function applyTheme() {
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if ((S.theme || 'system') === 'system') render(); });
 setupAskJarvis();
+function renderNow() {
+  const d = new Date();
+  $('#nowDay').textContent = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  $('#nowTime').textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+renderNow();
+setInterval(renderNow, 15000);
 
 // ============================================================
 // TODAY
@@ -570,7 +577,12 @@ let chatOpen = false;
 function chatBubbles() {
   return chatHistory.map(m => `<div class="chat-msg ${m.role}">${esc(m.text)}</div>`).join('');
 }
+const SMALL_TALK_RE = /^\s*(hi+|hello+|hey+|yo+|sup|wassup|what'?s up|how are (you|u)|how r u|kaise ho|kya haal|kaise hai|lol+|haha+|thanks?|thank you|thx|ok+|okay|bye+|good (morning|night|afternoon|evening)|gm|gn)\s*[!.?]*\s*$/i;
 function localChatReply(t, question) {
+  if (SMALL_TALK_RE.test(question)) {
+    const replies = ["Hey! All good here. What's up?", "Doing fine, just keeping tabs on your day 👀 what's on your mind?", "All good! You?", "Here and watching your stats like a hawk. What's up?"];
+    return replies[Math.floor(Math.random() * replies.length)];
+  }
   const gaps = nutrientGaps(t);
   if (!gaps.length) return "You're basically on target today — eat whatever sounds good, you've earned it.";
   const g = gaps[0], d = nutr(g.k), picks = pickFoodsFor(g.k, g.gap);
@@ -617,10 +629,13 @@ function setupAskJarvis() {
         mind: { mood: t.mood, energy: t.energy, meditation_min: t.skills.meditation, target_meditation_min: S.meditationTarget, screen_hours: t.screen, screen_limit_hours: S.screenLimit, social: t.social },
         log_today: day.entries.map(e => e.text)
       };
-      const reply = await G.askCoach(S, { summary, menuText: S.messMenu || null, history: chatHistory.slice(0, -1), question: text });
-      chatHistory.push({ role: 'jarvis', text: reply || "Hmm, I didn't get that — try asking differently?" });
+      const recentHistory = chatHistory.slice(0, -1).slice(-10); // keep the prompt small so replies stay fast and don't get cut off
+      const ask = () => G.askCoach(S, { summary, menuText: S.messMenu || null, history: recentHistory, question: text });
+      let reply;
+      try { reply = await ask(); } catch { reply = await ask(); } // one quiet retry — Gemini occasionally hiccups on a single call
+      chatHistory.push({ role: 'jarvis', text: reply || "Didn't quite catch that — say it again?" });
     } catch (e) {
-      chatHistory.push({ role: 'jarvis', text: `Couldn't reach ${G.providerName(S)} (${(e.message || 'error').slice(0, 60)}). Try again?` });
+      chatHistory.push({ role: 'jarvis', text: `${(e.message || "Something went wrong").slice(0, 80)} — try again?` });
     }
     log.innerHTML = chatBubbles(); log.scrollTop = log.scrollHeight;
   };
